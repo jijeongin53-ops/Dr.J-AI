@@ -136,7 +136,7 @@ export function Navbar() {
                 onClick={() => setSwitcherOpen(!switcherOpen)}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-900 border border-zinc-700 hover:border-zinc-600 text-xs text-white transition"
               >
-                <span className="font-semibold text-zinc-300">{user.carrotNickname}</span>
+                <span className="font-semibold text-zinc-300">{user.name}</span>
                 <RoleBadge role={user.role} size="sm" />
                 <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
               </button>

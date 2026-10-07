@@ -130,54 +130,40 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     }
   };
 
-  // 이미 로그인된 사용자인 경우 안내 카드
-  if (currentUser) {
-    return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-carrot/10 border border-carrot/30 flex items-center justify-center shrink-0">
-            <Sparkles className="w-6 h-6 text-carrot" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-base">
-                {currentUser.name} 회원님
-              </span>
-              <RoleBadge role={currentUser.role} size="sm" />
-              {currentUser.status === 'approved' ? (
-                <span className="text-[11px] text-emerald-400 font-medium">● 승인 완료</span>
-              ) : (
-                <span className="text-[11px] text-amber-400 font-medium">● 승인 대기 중</span>
-              )}
-            </div>
-            <p className="text-xs text-zinc-400 mt-1">
-              연락처: {currentUser.phoneNumber} | 직업: {currentUser.job || '회원'} | 가입일: {currentUser.joinedAt}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <a
-            href="/lectures"
-            className="flex-1 sm:flex-none px-4 py-2 bg-white text-black hover:bg-zinc-200 text-xs font-bold rounded-lg text-center transition"
-          >
-            강의실 바로가기
-          </a>
-          <a
-            href="/chat"
-            className="flex-1 sm:flex-none px-4 py-2 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white text-xs font-medium rounded-lg text-center transition"
-          >
-            채팅방 참여
-          </a>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
       {/* 장식용 글로우 효과 */}
       <div className="absolute top-0 right-0 w-80 h-80 bg-carrot/5 rounded-full blur-3xl pointer-events-none" />
+
+      {/* 이미 로그인되어 있는 경우 상단 안내 배너 */}
+      {currentUser && (
+        <div className="mb-6 p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-zinc-300">
+              현재 <strong className="text-white">{currentUser.name}</strong> ({currentUser.phoneNumber}) 계정으로 접속 중입니다.
+            </span>
+            <RoleBadge role={currentUser.role} size="sm" />
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/lectures"
+              className="px-3 py-1 bg-white text-black hover:bg-zinc-200 font-semibold rounded text-[11px] transition"
+            >
+              강의실 가기
+            </a>
+            <button
+              onClick={() => {
+                localStorage.removeItem('daangn_ai_user');
+                window.location.reload();
+              }}
+              className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded text-[11px] transition"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 탭 헤더: 회원가입이 먼저 나옴 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-850 pb-5 mb-6">
