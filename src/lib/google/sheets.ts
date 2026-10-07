@@ -292,15 +292,24 @@ export async function getLectures(): Promise<Lecture[]> {
  * 강의 추가 (관리자용) - 구글 시트 '동영상 업로드 현황' 시트에 자동 기록
  */
 export async function addLecture(lecture: Lecture): Promise<Lecture> {
-  inMemoryLectures.unshift(lecture);
+  // 이미 존재하는 강의인지 확인 후 중복 방지
+  const existingIdx = inMemoryLectures.findIndex((l) => l.id === lecture.id);
+  if (existingIdx >= 0) {
+    inMemoryLectures[existingIdx] = lecture;
+  } else {
+    inMemoryLectures.unshift(lecture);
+  }
 
-  // 구글 스프레드시트 '동영상 업로드 현황' 시트에 행 추가
+  // 구글 스프레드시트 '동영상 업로드 현황' 시트에 행 추가 (논블로킹 및 타임아웃 방어)
   const gasUrl = getRuntimeGasUrl();
   if (gasUrl) {
     try {
-      await fetch(gasUrl, {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           action: 'addLecture',
           data: {
@@ -314,13 +323,85 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
             createdAt: lecture.createdAt,
           },
         }),
-      });
+      })
+        .then(() => clearTimeout(timer))
+        .catch((e) => console.warn('[Google Sheets] 강의 시트 추가 비동기 실패:', e.message));
     } catch (e) {
       console.warn('[Google Sheets] 강의 시트 추가 실패:', e);
     }
   }
 
   return lecture;
+}
+
+/**
+ * 강의 수정 (관리자용)
+ */
+export async function updateLecture(updated: Lecture): Promise<Lecture | null> {
+  const index = inMemoryLectures.findIndex((l) => l.id === updated.id);
+  if (index !== -1) {
+    inMemoryLectures[index] = { ...inMemoryLectures[index], ...updated };
+
+    // 구글 스프레드시트 동기화 시도 (논블로킹)
+    const gasUrl = getRuntimeGasUrl();
+    if (gasUrl) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            action: 'updateLecture',
+            data: updated,
+          }),
+        })
+          .then(() => clearTimeout(timer))
+          .catch(() => {});
+      } catch (e) {
+        // 무시
+      }
+    }
+
+    return inMemoryLectures[index];
+  }
+  return null;
+}
+
+/**
+ * 강의 삭제 (관리자용)
+ */
+export async function deleteLecture(id: string): Promise<boolean> {
+  const beforeLen = inMemoryLectures.length;
+  inMemoryLectures = inMemoryLectures.filter((l) => l.id !== id);
+  const deleted = inMemoryLectures.length < beforeLen;
+
+  // 구글 스프레드시트 동기화 시도 (논블로킹)
+  if (deleted) {
+    const gasUrl = getRuntimeGasUrl();
+    if (gasUrl) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            action: 'deleteLecture',
+            id,
+          }),
+        })
+          .then(() => clearTimeout(timer))
+          .catch(() => {});
+      } catch (e) {
+        // 무시
+      }
+    }
+  }
+
+  return deleted;
 }
 
 /**

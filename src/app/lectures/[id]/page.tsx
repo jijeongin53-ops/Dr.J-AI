@@ -9,7 +9,9 @@ import { VideoPlayer } from '@/components/lecture/VideoPlayer';
 import { MaterialList } from '@/components/lecture/MaterialList';
 import { CommentSection } from '@/components/lecture/CommentSection';
 import { RoleBadge } from '@/components/common/RoleBadge';
-import { ArrowLeft, Clock, Calendar, FileText } from 'lucide-react';
+import { LectureEditModal } from '@/components/admin/LectureEditModal';
+import { mergeLectures, deleteStoredLecture } from '@/lib/lecturesStorage';
+import { ArrowLeft, Clock, Calendar, FileText, Edit2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LectureDetailPage() {
@@ -21,23 +23,34 @@ export default function LectureDetailPage() {
   const [lecture, setLecture] = useState<Lecture | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const user = getCurrentUser();
     if (user) setCurrentUser(user);
 
-    // 강의 정보 조회
+    // 로컬스토리지 병합 데이터에서 먼저 조회
+    const localLectures = mergeLectures(initialLectures);
+    const localFound = localLectures.find((l) => l.id === lectureId);
+    if (localFound) {
+      setLecture(localFound);
+      setLoading(false);
+    }
+
+    // 강의 정보 서버 조회
     fetch('/api/lectures')
       .then((res) => res.json())
       .then((data) => {
-        const found = (data.lectures || initialLectures).find(
-          (l: Lecture) => l.id === lectureId
-        );
-        setLecture(found || null);
+        const merged = mergeLectures(data.lectures || initialLectures);
+        const found = merged.find((l: Lecture) => l.id === lectureId);
+        if (found) setLecture(found);
       })
       .catch(() => {
-        const found = initialLectures.find((l) => l.id === lectureId);
-        setLecture(found || null);
+        if (!localFound) {
+          const found = initialLectures.find((l) => l.id === lectureId);
+          setLecture(found || null);
+        }
       })
       .finally(() => setLoading(false));
 
@@ -51,6 +64,25 @@ export default function LectureDetailPage() {
         setComments(initialComments.filter((c) => c.lectureId === lectureId));
       });
   }, [lectureId]);
+
+  const handleDelete = async () => {
+    if (!lecture) return;
+    if (!confirm(`'${lecture.title}' 강의를 정말 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await fetch(`/api/lectures?id=${lecture.id}`, { method: 'DELETE' });
+      deleteStoredLecture(lecture.id);
+      router.push('/lectures');
+    } catch (err) {
+      deleteStoredLecture(lecture.id);
+      router.push('/lectures');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -77,8 +109,8 @@ export default function LectureDetailPage() {
 
   return (
     <div className="space-y-8 py-4 max-w-5xl mx-auto">
-      {/* 뒤로가기 버튼 */}
-      <div>
+      {/* 뒤로가기 버튼 및 관리자 액션 */}
+      <div className="flex items-center justify-between">
         <Link
           href="/lectures"
           className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 font-semibold transition"
@@ -86,6 +118,26 @@ export default function LectureDetailPage() {
           <ArrowLeft className="w-4 h-4" />
           <span>강의 및 자료실 전체 목록</span>
         </Link>
+
+        {currentUser?.role === 'admin' && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsEditOpen(true)}
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition"
+            >
+              <Edit2 className="w-3.5 h-3.5 text-carrot" />
+              <span>강의 수정</span>
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{deleting ? '삭제 중...' : '강의 삭제'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 1. 구글 드라이브 비디오 플레이어 */}
@@ -173,6 +225,18 @@ export default function LectureDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* 강의 수정 모달 */}
+      {isEditOpen && lecture && (
+        <LectureEditModal
+          lecture={lecture}
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          onSuccess={(updated) => {
+            setLecture(updated);
+          }}
+        />
+      )}
     </div>
   );
 }

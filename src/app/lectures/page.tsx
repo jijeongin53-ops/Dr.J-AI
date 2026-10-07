@@ -7,11 +7,12 @@ import { initialLectures } from '@/lib/mockData';
 import { LectureCard } from '@/components/lecture/LectureCard';
 import { LectureUploader } from '@/components/admin/LectureUploader';
 import { LECTURE_CATEGORIES } from '@/lib/constants';
+import { mergeLectures } from '@/lib/lecturesStorage';
 import { Search, BookOpen } from 'lucide-react';
 
 export default function LecturesPage() {
   const [currentUser, setCurrentUser] = useState<MemberUser | null>(null);
-  const [lectures, setLectures] = useState<Lecture[]>(initialLectures);
+  const [lectures, setLectures] = useState<Lecture[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('전체');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -19,13 +20,28 @@ export default function LecturesPage() {
     const user = getCurrentUser();
     if (user) setCurrentUser(user);
 
+    // 초기 마운트 시 로컬스토리지 데이터 우선 로드
+    const mergedInitial = mergeLectures(initialLectures);
+    setLectures(mergedInitial);
+
     fetch('/api/lectures')
       .then((res) => res.json())
       .then((data) => {
-        if (data.lectures) setLectures(data.lectures);
+        if (data.lectures) {
+          const merged = mergeLectures(data.lectures);
+          setLectures(merged);
+        }
       })
       .catch(() => {});
   }, []);
+
+  const handleLectureUpdated = (updated: Lecture) => {
+    setLectures((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+  };
+
+  const handleLectureDeleted = (id: string) => {
+    setLectures((prev) => prev.filter((l) => l.id !== id));
+  };
 
   const filteredLectures = lectures.filter((l) => {
     const matchesCategory =
@@ -101,6 +117,8 @@ export default function LecturesPage() {
               key={lecture.id}
               lecture={lecture}
               userRole={currentUser?.role}
+              onUpdated={handleLectureUpdated}
+              onDeleted={handleLectureDeleted}
             />
           ))}
         </div>

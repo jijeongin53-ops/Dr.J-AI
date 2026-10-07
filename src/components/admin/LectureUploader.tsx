@@ -19,8 +19,8 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
   const [category, setCategory] = useState<string>(LECTURE_CATEGORIES[1]);
   const [videoUrl, setVideoUrl] = useState('');
   const [duration, setDuration] = useState('45분');
-  const [minViewRole, setMinViewRole] = useState<MemberRole>('regular');
-  const [minDownloadRole, setMinDownloadRole] = useState<MemberRole>('vip');
+  const [minViewRole, setMinViewRole] = useState<MemberRole>('guest');
+  const [minDownloadRole, setMinDownloadRole] = useState<MemberRole>('guest');
 
   // Materials
   const [materialName, setMaterialName] = useState('');
@@ -34,35 +34,54 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
     }
 
     setLoading(true);
-    try {
-      const materials = materialName.trim()
-        ? [
-            {
-              name: materialName.trim(),
-              driveFileId: materialDriveId.trim(),
-              fileSize: '자료',
-              minDownloadRole,
-            },
-          ]
-        : [];
+    const materials = materialName.trim()
+      ? [
+          {
+            id: `mat-${Date.now()}`,
+            name: materialName.trim(),
+            driveFileId: materialDriveId.trim(),
+            fileSize: '자료',
+            minDownloadRole,
+          },
+        ]
+      : [];
 
+    const newLectureData: Lecture = {
+      id: `lec-${Date.now()}`,
+      title: title.trim(),
+      description: description.trim(),
+      category,
+      videoUrl: videoUrl.trim(),
+      duration: duration.trim(),
+      minViewRole,
+      minDownloadRole,
+      materials,
+      createdAt: new Date().toISOString().split('T')[0],
+      isPublished: true,
+    };
+
+    try {
       const res = await fetch('/api/lectures', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
-          description,
-          category,
-          videoUrl,
-          duration,
-          minViewRole,
-          minDownloadRole,
-          materials,
+          title: newLectureData.title,
+          description: newLectureData.description,
+          category: newLectureData.category,
+          videoUrl: newLectureData.videoUrl,
+          duration: newLectureData.duration,
+          minViewRole: newLectureData.minViewRole,
+          minDownloadRole: newLectureData.minDownloadRole,
+          materials: newLectureData.materials,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
+        const finalLecture = data.lecture || newLectureData;
+        const { saveStoredLecture } = await import('@/lib/lecturesStorage');
+        saveStoredLecture(finalLecture);
+
         alert('새 강의가 성공적으로 등록되었습니다.');
         setTitle('');
         setDescription('');
@@ -71,15 +90,33 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
         setMaterialDriveId('');
         setIsOpen(false);
         if (onSuccess) {
-          onSuccess(data.lecture);
+          onSuccess(finalLecture);
         } else {
           window.location.reload();
         }
       } else {
-        alert('강의 등록에 실패했습니다.');
+        // 서버 응답 지연/에러 시에도 로컬에 안전하게 저장
+        const { saveStoredLecture } = await import('@/lib/lecturesStorage');
+        saveStoredLecture(newLectureData);
+        alert('새 강의가 등록되었습니다 (로컬 보존 완료).');
+        setIsOpen(false);
+        if (onSuccess) {
+          onSuccess(newLectureData);
+        } else {
+          window.location.reload();
+        }
       }
     } catch (e) {
-      alert('등록 중 네트워크 오류가 발생했습니다.');
+      // 네트워크 예외 발생 시 로컬 보존
+      const { saveStoredLecture } = await import('@/lib/lecturesStorage');
+      saveStoredLecture(newLectureData);
+      alert('새 강의가 등록되었습니다.');
+      setIsOpen(false);
+      if (onSuccess) {
+        onSuccess(newLectureData);
+      } else {
+        window.location.reload();
+      }
     } finally {
       setLoading(false);
     }
@@ -195,6 +232,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
                 onChange={(e) => setMinDownloadRole(e.target.value as MemberRole)}
                 className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 focus:outline-none focus:border-carrot"
               >
+                <option value="guest">준회원 이상 (누구나 다운로드 가능)</option>
                 <option value="regular">정회원 이상 다운로드</option>
                 <option value="vip">VIP 회원만 다운로드 가능</option>
                 <option value="admin">관리자만 다운로드</option>
