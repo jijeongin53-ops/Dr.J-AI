@@ -17,6 +17,7 @@ export interface MemberUser {
   status: MemberStatus;
   joinedAt: string;
   note?: string; // 모임장 메모
+  rejectionReason?: string; // 반려/거절 사유
 }
 
 // 강의 자료 및 파일 인터페이스
@@ -44,6 +45,7 @@ export interface Lecture {
   createdAt: string;
   thumbnailUrl?: string;
   isPublished: boolean;
+  maxAttendees?: number; // 입장 가능한 최대 회원 수 (0 또는 미설정 시 무제한)
 }
 
 // 댓글 인터페이스
@@ -56,6 +58,31 @@ export interface Comment {
   carrotNickname: string;
   content: string;
   createdAt: string;
+}
+
+// 강의 후기 및 평점 인터페이스
+export interface LectureReview {
+  id: string;
+  lectureId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: MemberRole;
+  carrotNickname?: string;
+  rating: number; // 1 ~ 5점
+  content: string; // 후기 내용
+  createdAt: string;
+}
+
+// Dr. J에게 질문하기 인터페이스
+export interface DrJQuestion {
+  id: string;
+  userName: string;
+  phoneNumber: string;
+  email: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  isAnswered?: boolean;
 }
 
 // 승인형 실시간 채팅 메시지 인터페이스

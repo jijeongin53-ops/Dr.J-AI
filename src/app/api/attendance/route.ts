@@ -42,7 +42,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, title, sessionId, user, userId, status } = body;
+    const { action, title, sessionId, user, userId, status, lectureId } = body;
 
     // 1. 관리자: 출석 체크 세션 시작 (전체 회원 앱에 푸시 트리거)
     if (action === 'start') {
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     }
 
     // 3. 회원: 푸시 알림을 보고 직접 출석 체크
+    // [요구사항 3 해결]: 해당 강의에 입장한 회원만 출석 가능
     if (action === 'checkIn') {
       if (!user || !user.name || !user.phoneNumber) {
         return NextResponse.json(
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
         );
       }
 
-      const result = await checkInMember(targetSessionId, user);
+      const result = await checkInMember(targetSessionId, user, lectureId);
       return NextResponse.json(result);
     }
 

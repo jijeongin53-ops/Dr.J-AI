@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUsers, addUser } from '@/lib/google/sheets';
+import { getUsers, addUser, updateUserData } from '@/lib/google/sheets';
 import { MemberUser } from '@/types';
 
 // 전화번호 정규화 (숫자만 추출)
@@ -78,6 +78,18 @@ export async function POST(request: Request) {
     );
 
     if (existing) {
+      // 이미 반려된 회원인 경우, 수정 재신청 안내
+      if (existing.status === 'rejected') {
+        return NextResponse.json(
+          {
+            error: `이전 가입 신청이 반려된 계정입니다. (반려 사유: ${existing.rejectionReason || '확인 필요'}) 로그인 화면에서 반려 사유를 확인 후 수정 재신청하실 수 있습니다.`,
+            isRejected: true,
+            user: existing,
+          },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
         { error: '이미 동일한 성명과 연락처로 가입된 계정이 존재합니다.' },
         { status: 409 }
@@ -107,5 +119,39 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     return NextResponse.json({ error: '회원가입 처리 중 오류가 발생했습니다.' }, { status: 500 });
+  }
+}
+
+// 회원 가입란 정보 수정 (반려 회원 재신청용)
+export async function PATCH(request: Request) {
+  try {
+    const body = await request.json();
+    const { userId, name, birthDate, job, phoneNumber, email, carrotNickname } = body;
+
+    if (!userId || !name || !phoneNumber || !email) {
+      return NextResponse.json({ error: '수정할 필수 항목이 누락되었습니다.' }, { status: 400 });
+    }
+
+    const updated = await updateUserData(userId, {
+      name,
+      birthDate,
+      job,
+      phoneNumber,
+      email,
+      carrotNickname,
+      status: 'pending', // 수정 후 승인 대기 상태로 재전환
+      rejectionReason: '', // 반려 사유 초기화
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: '수정할 회원을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      user: updated,
+      message: '회원 가입 정보가 성공적으로 수정 및 재신청되었습니다! 관리자 검토 후 승인됩니다.',
+    });
+  } catch (error) {
+    return NextResponse.json({ error: '정보 수정 처리 중 오류가 발생했습니다.' }, { status: 500 });
   }
 }

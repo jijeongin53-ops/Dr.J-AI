@@ -13,6 +13,7 @@ import {
   ChevronDown,
   LogOut,
   CalendarCheck2,
+  MessageCircleQuestion,
 } from 'lucide-react';
 
 export function Navbar() {
@@ -107,8 +108,19 @@ export function Navbar() {
             </nav>
           </div>
 
-          {/* 우측 영역: [회원 현황 아이콘] + 계정 버튼 / 로그인 / 로그아웃 */}
+          {/* 우측 영역: [회원 현황 아이콘] + [Dr. J에게 물어봐!] + 계정 버튼 / 로그인 / 로그아웃 */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Dr. J에게 물어봐! 헤더 버튼 */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('openAskDrJ'))}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-900 text-xs font-bold transition shadow-sm"
+              title="모임장 Dr. J에게 질문하기 (구글 시트 저장 및 이메일 발송)"
+            >
+              <MessageCircleQuestion className="w-4 h-4 text-carrot" />
+              <span className="hidden sm:inline">Dr. J에게 물어봐!</span>
+              <span className="sm:hidden">질문</span>
+            </button>
+
             {/* 회원 현황 아이콘 버튼 */}
             <button
               onClick={() => setStatusModalOpen(true)}

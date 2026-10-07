@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { MemberUser, Lecture, Comment, ChatMessage } from '@/types';
+import { MemberUser, Lecture, Comment, ChatMessage, DrJQuestion, LectureReview } from '@/types';
 import { GOOGLE_SHEET_ID, GOOGLE_APPS_SCRIPT_DEFAULT_URL } from '../constants';
 
 // 구글 인증 클라이언트 생성 (서비스 계정)
@@ -247,12 +247,16 @@ export async function addUser(user: MemberUser): Promise<{ user: MemberUser; she
 export async function updateUserRoleAndStatus(
   userId: string,
   role: MemberUser['role'],
-  status: MemberUser['status']
+  status: MemberUser['status'],
+  rejectionReason?: string
 ): Promise<MemberUser | null> {
   const target = inMemoryUsers.find((u) => u.id === userId);
   if (target) {
     target.role = role;
     target.status = status;
+    if (rejectionReason !== undefined) {
+      target.rejectionReason = rejectionReason;
+    }
 
     // 구글 스프레드시트의 해당 행 등급/상태 동기화 (GAS 웹훅)
     const gasUrl = getRuntimeGasUrl();
@@ -268,6 +272,7 @@ export async function updateUserRoleAndStatus(
               phoneNumber: target.phoneNumber,
               role,
               status,
+              rejectionReason: target.rejectionReason || '',
             },
           }),
         });
@@ -279,6 +284,127 @@ export async function updateUserRoleAndStatus(
     return target;
   }
   return null;
+}
+
+/**
+ * 회원 가입 정보 수정 (반려 회원 재신청용)
+ */
+export async function updateUserData(
+  userId: string,
+  data: Partial<MemberUser>
+): Promise<MemberUser | null> {
+  const target = inMemoryUsers.find((u) => u.id === userId);
+  if (target) {
+    if (data.name) target.name = data.name.trim();
+    if (data.phoneNumber) target.phoneNumber = data.phoneNumber.trim();
+    if (data.birthDate) target.birthDate = data.birthDate.trim();
+    if (data.job) target.job = data.job.trim();
+    if (data.email) target.email = data.email.trim();
+    if (data.carrotNickname) target.carrotNickname = data.carrotNickname.trim();
+    if (data.status) target.status = data.status;
+    if (data.rejectionReason !== undefined) target.rejectionReason = data.rejectionReason;
+
+    const gasUrl = getRuntimeGasUrl();
+    if (gasUrl) {
+      try {
+        await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'updateUser',
+            data: target,
+          }),
+        });
+      } catch (e) {
+        console.warn('[Google Sheets] 사용자 정보 업데이트 실패:', e);
+      }
+    }
+
+    return target;
+  }
+  return null;
+}
+
+// 메모리 내 Dr. J 질문 및 후기 목록
+let inMemoryDrJQuestions: DrJQuestion[] = [];
+let inMemoryReviews: LectureReview[] = [];
+
+/**
+ * Dr. J에게 질문 저장 (구글 시트 'DrJ_질문함' 자동 기록)
+ */
+export async function addDrJQuestion(question: DrJQuestion): Promise<DrJQuestion> {
+  inMemoryDrJQuestions.unshift(question);
+
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'askDrJ',
+          data: question,
+        }),
+      }).catch((e) => console.warn('[Google Sheets] Dr. J 질문 시트 기록 비동기 실패:', e));
+    } catch (_) {}
+  }
+
+  const auth = getGoogleAuth();
+  if (auth) {
+    try {
+      const sheets = google.sheets({ version: 'v4', auth });
+      const rowData = [
+        question.id,
+        question.createdAt,
+        question.userName,
+        question.phoneNumber,
+        question.email,
+        question.title,
+        question.content,
+      ];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: 'DrJ_질문함!A:G',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [rowData] },
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  return question;
+}
+
+/**
+ * 강의 후기 목록 조회
+ */
+export async function getReviews(lectureId?: string): Promise<LectureReview[]> {
+  if (lectureId) {
+    return inMemoryReviews.filter((r) => r.lectureId === lectureId);
+  }
+  return inMemoryReviews;
+}
+
+/**
+ * 강의 후기 추가
+ */
+export async function addReview(review: LectureReview): Promise<LectureReview> {
+  inMemoryReviews.unshift(review);
+
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addReview',
+          data: review,
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  return review;
 }
 
 /**

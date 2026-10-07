@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { MemberUser, MemberRole, MemberStatus } from '@/types';
 import { RoleBadge } from '../common/RoleBadge';
-import { UserCheck, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UserCheck, RefreshCw, CheckCircle2, AlertCircle, X, Mail, AlertTriangle } from 'lucide-react';
 
 interface MemberManagerProps {
   initialUsers: MemberUser[];
@@ -14,6 +14,10 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+
+  // 반려/거절 사유 작성 모달 상태
+  const [rejectModalUser, setRejectModalUser] = useState<MemberUser | null>(null);
+  const [rejectReason, setRejectReason] = useState('당근 모임 정회원 확인이 필요합니다.');
 
   // 부모 컴포넌트의 initialUsers 변경 시 동기화
   useEffect(() => {
@@ -43,30 +47,39 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
     refreshUsers();
   }, []);
 
-  const handleUpdate = async (userId: string, role: MemberRole, status: MemberStatus) => {
+  const handleUpdate = async (
+    userId: string,
+    role: MemberRole,
+    status: MemberStatus,
+    rejectionReason?: string
+  ) => {
     setLoadingId(userId);
     setFeedbackMsg(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, role, status }),
+        body: JSON.stringify({ userId, role, status, rejectionReason }),
       });
+
+      const data = await res.json();
 
       if (res.ok) {
         setUsers((prev) =>
-          prev.map((u) => (u.id === userId ? { ...u, role, status } : u))
+          prev.map((u) =>
+            u.id === userId ? { ...u, role, status, rejectionReason } : u
+          )
         );
         setFeedbackMsg({
           id: userId,
-          text: '등급 및 승인 상태가 구글 시트에 즉시 반영되었습니다.',
+          text: data.message || '등급 및 승인 상태가 구글 시트에 즉시 반영되었습니다.',
           ok: true,
         });
-        setTimeout(() => setFeedbackMsg(null), 3000);
+        setTimeout(() => setFeedbackMsg(null), 4000);
       } else {
         setFeedbackMsg({
           id: userId,
-          text: '변경 처리에 실패했습니다.',
+          text: data.error || '변경 처리에 실패했습니다.',
           ok: false,
         });
       }
@@ -78,6 +91,7 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
       });
     } finally {
       setLoadingId(null);
+      setRejectModalUser(null);
     }
   };
 
@@ -173,7 +187,14 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
                         </span>
                       )}
                       {u.status === 'rejected' && (
-                        <span className="text-[11px] text-red-500 font-semibold">거절됨</span>
+                        <div>
+                          <span className="text-[11px] text-red-500 font-semibold">거절됨</span>
+                          {u.rejectionReason && (
+                            <p className="text-[10px] text-gray-500 truncate max-w-[120px]" title={u.rejectionReason}>
+                              사유: {u.rejectionReason}
+                            </p>
+                          )}
+                        </div>
                       )}
                       {u.status === 'blocked' && (
                         <span className="text-[11px] text-gray-400">차단됨</span>
@@ -188,13 +209,18 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
                               onClick={() => handleUpdate(u.id, 'regular', 'approved')}
                               disabled={isLoading}
                               className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition shadow-sm disabled:opacity-50"
+                              title="정회원 즉시 승인 및 축하 메일 발송"
                             >
                               정회원 즉시 승인
                             </button>
                             <button
-                              onClick={() => handleUpdate(u.id, 'guest', 'rejected')}
+                              onClick={() => {
+                                setRejectModalUser(u);
+                                setRejectReason('당근 모임 정회원 확인이 필요합니다.');
+                              }}
                               disabled={isLoading}
                               className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[11px] transition disabled:opacity-50"
+                              title="반려 사유 작성 후 메일 발송"
                             >
                               반려
                             </button>
@@ -222,9 +248,15 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
                           <select
                             value={u.status}
                             disabled={isLoading}
-                            onChange={(e) =>
-                              handleUpdate(u.id, u.role, e.target.value as MemberStatus)
-                            }
+                            onChange={(e) => {
+                              const newStatus = e.target.value as MemberStatus;
+                              if (newStatus === 'rejected') {
+                                setRejectModalUser(u);
+                                setRejectReason('가입 정보 확인 및 보완이 필요합니다.');
+                              } else {
+                                handleUpdate(u.id, u.role, newStatus);
+                              }
+                            }}
                             className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-2 py-1 font-medium focus:outline-none focus:border-black disabled:opacity-50"
                             title="승인 상태 변경"
                           >
@@ -242,6 +274,92 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
           </tbody>
         </table>
       </div>
+
+      {/* 반려 사유 입력 모달 */}
+      {rejectModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2 text-red-600 font-bold text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                <span>회원 가입 반려 및 사유 작성</span>
+              </div>
+              <button
+                onClick={() => setRejectModalUser(null)}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-3 text-xs space-y-1">
+              <p>
+                <strong>회원명:</strong> {rejectModalUser.name} ({rejectModalUser.phoneNumber})
+              </p>
+              <p>
+                <strong>발송 이메일:</strong> {rejectModalUser.email}
+              </p>
+              <p className="text-[11px] text-gray-500">
+                * 반려 처리 시 위 이메일로 거절 사유와 함께 수정 안내 메일이 발송됩니다.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-gray-700 block">
+                반려/거절 사유 입력
+              </label>
+
+              {/* 빠른 사유 칩 */}
+              <div className="flex flex-wrap gap-1.5 pb-1">
+                {[
+                  '당근 모임 정회원 확인 필요',
+                  '연락처를 정확히 입력해 주세요',
+                  '성명/생년월일 확인 필요',
+                  '당근 닉네임 불일치',
+                ].map((txt) => (
+                  <button
+                    key={txt}
+                    type="button"
+                    onClick={() => setRejectReason(txt)}
+                    className="text-[10px] px-2 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 transition"
+                  >
+                    {txt}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="회원에게 전달될 구체적인 반려 사유를 작성하세요."
+                rows={4}
+                className="w-full text-xs border border-gray-300 rounded-xl p-3 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setRejectModalUser(null)}
+                className="px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={loadingId === rejectModalUser.id || !rejectReason.trim()}
+                onClick={() =>
+                  handleUpdate(rejectModalUser.id, 'guest', 'rejected', rejectReason.trim())
+                }
+                className="px-4 py-2 text-xs font-bold bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                <span>반려 처리 및 사유 메일 발송</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,6 +31,9 @@ export function LectureEditModal({
   const [minDownloadRole, setMinDownloadRole] = useState<MemberRole>(
     lecture.minDownloadRole || 'guest'
   );
+  const [maxAttendees, setMaxAttendees] = useState<number>(
+    typeof lecture.maxAttendees === 'number' ? lecture.maxAttendees : 30
+  );
 
   // Materials
   const initialMaterial = lecture.materials?.[0];
@@ -71,6 +74,7 @@ export function LectureEditModal({
       duration: duration.trim(),
       minViewRole,
       minDownloadRole,
+      maxAttendees: Number(maxAttendees) >= 0 ? Number(maxAttendees) : 30,
       materials: updatedMaterials,
     };
 
@@ -165,7 +169,7 @@ export function LectureEditModal({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
                 동영상 링크 or 파일 ID
@@ -209,6 +213,22 @@ export function LectureEditModal({
                 <option value="vip">VIP 회원만 다운로드 가능</option>
                 <option value="admin">관리자만 다운로드</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                입장 정원 수 (명) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={maxAttendees}
+                onChange={(e) => setMaxAttendees(parseInt(e.target.value, 10) || 0)}
+                placeholder="예: 30 (0은 무제한)"
+                className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 focus:outline-none focus:border-carrot"
+                title="초과 시 대기열로 등록되며 퇴장 발생 시 자동 입장됩니다 (0은 무제한)"
+              />
+              <span className="text-[10px] text-gray-400 mt-0.5 block">0 입력 시 무제한</span>
             </div>
           </div>
 

@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       videoUrl,
       duration = '45분',
       materials = [],
+      maxAttendees = 30,
     } = body;
 
     if (!title || !description) {
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       videoUrl,
       driveFileId,
       duration,
+      maxAttendees: Number(maxAttendees) >= 0 ? Number(maxAttendees) : 30,
       materials: materials.map((m: any, idx: number) => ({
         id: m.id || `mat-${Date.now()}-${idx}`,
         name: m.name || '자료.pdf',
@@ -73,6 +75,7 @@ export async function PUT(request: Request) {
       videoUrl,
       duration,
       materials = [],
+      maxAttendees,
     } = body;
 
     if (!id || !title) {
@@ -91,6 +94,7 @@ export async function PUT(request: Request) {
       videoUrl: videoUrl || '',
       driveFileId,
       duration: duration || '45분',
+      maxAttendees: typeof maxAttendees === 'number' ? maxAttendees : 30,
       materials: materials.map((m: any, idx: number) => ({
         id: m.id || `mat-${Date.now()}-${idx}`,
         name: m.name || '자료.pdf',

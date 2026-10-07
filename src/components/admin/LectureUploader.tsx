@@ -21,6 +21,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
   const [duration, setDuration] = useState('45분');
   const [minViewRole, setMinViewRole] = useState<MemberRole>('guest');
   const [minDownloadRole, setMinDownloadRole] = useState<MemberRole>('guest');
+  const [maxAttendees, setMaxAttendees] = useState<number>(30); // [요구사항 4]: 입장 가능한 회원 수 설정 (0은 무제한)
 
   // Materials
   const [materialName, setMaterialName] = useState('');
@@ -55,6 +56,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
       duration: duration.trim(),
       minViewRole,
       minDownloadRole,
+      maxAttendees: Number(maxAttendees) >= 0 ? Number(maxAttendees) : 30,
       materials,
       createdAt: new Date().toISOString().split('T')[0],
       isPublished: true,
@@ -72,6 +74,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
           duration: newLectureData.duration,
           minViewRole: newLectureData.minViewRole,
           minDownloadRole: newLectureData.minDownloadRole,
+          maxAttendees: newLectureData.maxAttendees,
           materials: newLectureData.materials,
         }),
       });
@@ -193,7 +196,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
                 동영상 링크 or 파일 ID
@@ -237,6 +240,22 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
                 <option value="vip">VIP 회원만 다운로드 가능</option>
                 <option value="admin">관리자만 다운로드</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                입장 정원 수 (명) *
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={maxAttendees}
+                onChange={(e) => setMaxAttendees(parseInt(e.target.value, 10) || 0)}
+                placeholder="예: 30 (0은 무제한)"
+                className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot"
+                title="초과 시 대기열로 등록되며 퇴장 발생 시 자동 입장됩니다 (0은 무제한)"
+              />
+              <span className="text-[10px] text-gray-400 mt-0.5 block">0 입력 시 무제한</span>
             </div>
           </div>
 

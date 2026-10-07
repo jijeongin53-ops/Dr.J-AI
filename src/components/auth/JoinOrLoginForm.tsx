@@ -35,6 +35,10 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
   const [email, setEmail] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(true);
 
+  // 반려된 회원 정보 수정 재신청 상태
+  const [editingUser, setEditingUser] = useState<MemberUser | null>(null);
+  const [rejectionNotice, setRejectionNotice] = useState<{ user: MemberUser; reason: string } | null>(null);
+
   // 로그인 폼 필드: 성명(아이디), 연락처(비밀번호)
   const [loginName, setLoginName] = useState('');
   const [loginPhone, setLoginPhone] = useState('');
@@ -44,7 +48,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 회원가입 제출
+  // 회원가입 또는 반려 정보 수정 제출
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -62,6 +66,40 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
 
     setLoading(true);
     try {
+      // 1. 반려된 회원의 정보 수정 재신청 (PATCH)
+      if (editingUser) {
+        const res = await fetch('/api/auth', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: editingUser.id,
+            name: name.trim(),
+            birthDate: birthDate.trim(),
+            job: job.trim(),
+            phoneNumber: phoneNumber.trim(),
+            email: email.trim(),
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          setErrorMsg(data.error || '정보 수정 및 재신청에 실패했습니다.');
+        } else {
+          setSuccessMsg(
+            '🎉 가입 정보가 수정되어 [승인 대기] 상태로 재신청되었습니다!\n관리자 검토 후 승인 완료 메일이 발송됩니다.'
+          );
+          setEditingUser(null);
+          setCurrentUser(data.user);
+          if (onAuthSuccess) {
+            onAuthSuccess(data.user);
+          } else {
+            setTimeout(() => window.location.reload(), 1500);
+          }
+        }
+        return;
+      }
+
+      // 2. 신규 회원가입 신청 (POST)
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,6 +114,13 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
 
       const data = await res.json();
       if (!res.ok) {
+        // 이미 반려된 회원인 경우 안내 및 수정 모드로 전환 유도
+        if (data.isRejected && data.user) {
+          setRejectionNotice({
+            user: data.user,
+            reason: data.user.rejectionReason || '가입 정보 확인 필요',
+          });
+        }
         setErrorMsg(data.error || '회원가입에 실패했습니다.');
       } else {
         // 클라이언트 측 구글 시트 웹훅 직접 백업 전송 (설정된 경우)
@@ -127,6 +172,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
+    setRejectionNotice(null);
 
     if (!loginName.trim() || !loginPhone.trim()) {
       setErrorMsg('성명(아이디)과 연락처(비밀번호)를 모두 입력하세요.');
@@ -145,6 +191,15 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
       if (!res.ok) {
         setErrorMsg(data.error || '성명 또는 연락처가 일치하지 않습니다.');
       } else {
+        // [요구사항 2 해결]: 회원이 반려/거절 상태인 경우, 거절 사유를 명확히 보여주고 가입란 수정 가능하게 유도
+        if (data.user.status === 'rejected') {
+          setRejectionNotice({
+            user: data.user,
+            reason: data.user.rejectionReason || '가입 정보 확인 및 보완이 필요합니다.',
+          });
+          return;
+        }
+
         setCurrentUser(data.user);
         setSuccessMsg(`${data.user.name}님, 환영합니다!`);
         if (onAuthSuccess) {
@@ -158,6 +213,19 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     } finally {
       setLoading(false);
     }
+  };
+
+  // 반려 사유 확인 후 가입 정보 수정 폼으로 전환
+  const startEditRejectedInfo = (targetUser: MemberUser) => {
+    setEditingUser(targetUser);
+    setName(targetUser.name);
+    setBirthDate(targetUser.birthDate || '');
+    setJob(targetUser.job || '');
+    setPhoneNumber(targetUser.phoneNumber);
+    setEmail(targetUser.email);
+    setRejectionNotice(null);
+    setErrorMsg('');
+    setMode('register');
   };
 
   const handleLogout = () => {
@@ -301,9 +369,76 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         </div>
       )}
 
+      {/* [요구사항 2 해결]: 반려된 회원 알림 및 가입 정보 수정 버튼 */}
+      {rejectionNotice && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border-2 border-amber-300 space-y-3 animate-fadeIn">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h4 className="text-xs sm:text-sm font-bold text-amber-900">
+                가입 신청이 반려되었습니다 ({rejectionNotice.user.name} 회원님)
+              </h4>
+              <p className="text-xs text-amber-800 font-medium">
+                <strong>반려 사유:</strong> {rejectionNotice.reason}
+              </p>
+              <p className="text-[11px] text-amber-700">
+                아래 버튼을 눌러 반려 사유에 맞게 가입 정보를 수정한 후 다시 승인을 신청하실 수 있습니다.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => startEditRejectedInfo(rejectionNotice.user)}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+            >
+              <span>가입 정보 수정 및 재신청하기</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. 회원가입 폼 (기본 첫 화면) */}
       {mode === 'register' ? (
         <form onSubmit={handleRegister} className="space-y-4">
+          {/* 수정 모드 배너 */}
+          {editingUser ? (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center justify-between">
+              <div>
+                <strong>✏️ 가입 정보 수정 모드:</strong> {editingUser.name}님의 이전 반려 사유를 보완하여 수정 중입니다.
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingUser(null);
+                  setName('');
+                  setBirthDate('');
+                  setJob('');
+                  setPhoneNumber('');
+                  setEmail('');
+                }}
+                className="text-[11px] text-blue-600 hover:underline font-semibold"
+              >
+                신규 가입으로 변경
+              </button>
+            </div>
+          ) : (
+            /* [요구사항 5 & 6 해결]: 정회원 및 VIP 회원 기준 명확한 안내 */
+            <div className="p-3.5 bg-orange-50/80 border border-orange-200 rounded-xl text-xs space-y-1">
+              <p className="font-bold text-gray-900 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-carrot" />
+                <span>회원 가입 자격 및 등급 안내</span>
+              </p>
+              <p className="text-gray-700">
+                • <strong>정회원:</strong> 당근 모임의 정회원이 가입 가능합니다. (가입 신청 후 모임장 확인 및 승인)
+              </p>
+              <p className="text-gray-700">
+                • <strong>VIP 회원:</strong> 관리자(모임장)의 승인으로 가능합니다.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
@@ -366,7 +501,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
 
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
-              이메일 *
+              이메일 (승인/반려 안내 수신용) *
             </label>
             <input
               type="email"
@@ -403,7 +538,13 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               className="w-full py-3.5 bg-carrot hover:bg-carrot-hover text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-md disabled:opacity-50"
             >
               <UserPlus className="w-4 h-4" />
-              <span>{loading ? '가입 신청 처리 중...' : '회원가입 신청하기'}</span>
+              <span>
+                {loading
+                  ? '처리 중...'
+                  : editingUser
+                  ? '가입 정보 수정 및 재신청 완료'
+                  : '회원가입 신청하기'}
+              </span>
             </button>
           </div>
         </form>

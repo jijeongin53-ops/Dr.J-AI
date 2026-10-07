@@ -4,7 +4,8 @@ import React, { useState } from 'react';
 import { LectureMaterial, MemberRole } from '@/types';
 import { hasRequiredRole } from '@/lib/google/drive';
 import { RoleBadge } from '../common/RoleBadge';
-import { FileText, Download, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FileText, Download, Lock, CheckCircle2, AlertCircle, ExternalLink } from 'lucide-react';
+import { getDriveViewerUrl } from '@/lib/google/drive';
 
 interface MaterialListProps {
   materials: LectureMaterial[];
@@ -40,6 +41,7 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
           userRole,
           minDownloadRole: material.minDownloadRole,
           driveFileId: material.driveFileId,
+          fileUrl: material.fileUrl,
           materialName: material.name,
         }),
       });
@@ -111,7 +113,19 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
                 </div>
               </div>
 
-              <div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {canDownload && (
+                  <a
+                    href={getDriveViewerUrl(mat.driveFileId || mat.fileUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1 transition shadow-sm"
+                    title="웹 브라우저에서 바로 열기"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5 text-carrot" />
+                    <span className="hidden sm:inline">바로보기</span>
+                  </a>
+                )}
                 <button
                   onClick={() => handleDownload(mat)}
                   disabled={downloadingId === mat.id}

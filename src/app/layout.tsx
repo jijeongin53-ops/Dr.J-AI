@@ -3,6 +3,7 @@ import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { AttendancePushAlert } from '@/components/attendance/AttendancePushAlert';
+import { AskDrJModal } from '@/components/common/AskDrJModal';
 
 export const metadata: Metadata = {
   title: "Dr. J's 교육 & 모임 플랫폼",
@@ -23,6 +24,8 @@ export default function RootLayout({
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {children}
         </main>
+        {/* [요구사항 8 해결]: Dr. J에게 물어봐! 플로팅 버튼 및 질문 팝업 창 */}
+        <AskDrJModal />
         <Footer />
       </body>
     </html>

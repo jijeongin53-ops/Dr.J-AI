@@ -8,6 +8,8 @@ import { initialLectures, initialComments } from '@/lib/mockData';
 import { VideoPlayer } from '@/components/lecture/VideoPlayer';
 import { MaterialList } from '@/components/lecture/MaterialList';
 import { CommentSection } from '@/components/lecture/CommentSection';
+import { LectureReviewSection } from '@/components/lecture/LectureReviewSection';
+import { LectureRoomManager } from '@/components/lecture/LectureRoomManager';
 import { RoleBadge } from '@/components/common/RoleBadge';
 import { LectureEditModal } from '@/components/admin/LectureEditModal';
 import { mergeLectures, deleteStoredLecture } from '@/lib/lecturesStorage';
@@ -140,6 +142,15 @@ export default function LectureDetailPage() {
         )}
       </div>
 
+      {/* 0. [요구사항 3 & 4 해결]: 강의실 실시간 정원, 대기열 및 입장자 전용 출석 체크 */}
+      <section>
+        <LectureRoomManager
+          lectureId={lecture.id}
+          maxAttendees={lecture.maxAttendees ?? 30}
+          currentUser={currentUser}
+        />
+      </section>
+
       {/* 1. 구글 드라이브 비디오 플레이어 */}
       <section>
         <VideoPlayer
@@ -203,6 +214,12 @@ export default function LectureDetailPage() {
               {lecture.description}
             </div>
           </div>
+
+          {/* [요구사항 7 해결]: 모든 강의에 후기 작성란 제공 */}
+          <LectureReviewSection
+            lectureId={lecture.id}
+            currentUser={currentUser}
+          />
 
           {/* 댓글 및 질의응답 */}
           <CommentSection

@@ -61,10 +61,15 @@ export function RoleGuideSection() {
           </div>
 
           {/* 정회원 */}
-          <div className="p-5 rounded-xl border border-gray-200 bg-white space-y-3 shadow-sm">
+          <div className="p-5 rounded-xl border border-gray-200 bg-white space-y-3 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
               <RoleBadge role="regular" size="md" />
-              <span className="text-xs text-gray-700 font-semibold">승인 정회원</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                당근 모임 정회원 가입 가능
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-emerald-50/50 border border-emerald-100 text-[11px] text-emerald-800 font-semibold">
+              📌 정회원 기준: 당근 모임의 정회원이 가입 가능합니다.
             </div>
             <ul className="space-y-2 text-xs text-gray-700">
               <li className="flex items-center gap-2">
@@ -83,10 +88,15 @@ export function RoleGuideSection() {
           </div>
 
           {/* VIP 회원 */}
-          <div className="p-5 rounded-xl border border-orange-200 bg-orange-50/30 space-y-3 shadow-sm">
+          <div className="p-5 rounded-xl border border-orange-200 bg-orange-50/30 space-y-3 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
               <RoleBadge role="vip" size="md" />
-              <span className="text-xs text-carrot font-bold">우수/VIP</span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-carrot border border-orange-200">
+                관리자 승인으로 가능
+              </span>
+            </div>
+            <div className="p-2 rounded-lg bg-orange-100/60 border border-orange-200 text-[11px] text-orange-900 font-semibold">
+              📌 VIP 회원 기준: 관리자의 승인으로 가능합니다.
             </div>
             <ul className="space-y-2 text-xs text-gray-800">
               <li className="flex items-center gap-2">

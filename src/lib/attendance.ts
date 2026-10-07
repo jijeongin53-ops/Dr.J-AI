@@ -1,5 +1,6 @@
 import { AttendanceSession, AttendanceRecord, MemberUser } from '@/types';
 import { getRuntimeGasUrl } from './google/sheets';
+import { isUserInLectureRoom } from './lectureRoom';
 
 // 메모리 내 출석 세션 및 출석 기록 상태 관리
 let activeSession: AttendanceSession | null = null;
@@ -99,11 +100,21 @@ export function stopAttendanceSession(): boolean {
 
 /**
  * 회원: 출석 푸시 알림을 받고 직접 출석 체크
+ * [요구사항 3 해결]: 출석 체크는 해당 강의에 입장한 회원만 할 수 있도록 엄격히 검증
  */
 export async function checkInMember(
   sessionId: string,
-  user: MemberUser
+  user: MemberUser,
+  lectureId?: string
 ): Promise<{ success: boolean; record?: AttendanceRecord; message: string }> {
+  // 강의실 입장 검증 (특정 강의가 지정된 경우)
+  if (lectureId && !isUserInLectureRoom(lectureId, user.id, user.phoneNumber)) {
+    return {
+      success: false,
+      message: '출석 체크는 해당 강의에 정상 입장한 회원만 할 수 있습니다. 먼저 강의실에 입장해 주세요.',
+    };
+  }
+
   // 이미 출석 체크했는지 확인
   const existing = attendanceRecords.find(
     (r) =>
