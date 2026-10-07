@@ -59,14 +59,20 @@ export function LectureCard({ lecture, userRole, onUpdated, onDeleted }: Lecture
         href={`/lectures/${lecture.id}`}
         className="group block rounded-2xl border border-gray-200 bg-white p-5 hover:border-gray-300 hover:shadow-md transition relative overflow-hidden"
       >
-        {/* 상단: 카테고리 & 시청 필요 등급 & 관리자 액션 */}
+        {/* 상단: 카테고리 & 입장 회원 등급 & 관리자 액션 */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <span className="text-[11px] font-semibold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-md">
             {lecture.category}
           </span>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-gray-400">시청:</span>
-            <RoleBadge role={lecture.minViewRole} size="sm" />
+            <span className="text-[11px] text-gray-400">입장 등급:</span>
+            {lecture.minViewRole === 'guest' ? (
+              <span className="inline-flex items-center font-semibold rounded-full px-2 py-0.5 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200">
+                누구나 입장
+              </span>
+            ) : (
+              <RoleBadge role={lecture.minViewRole} size="sm" />
+            )}
 
             {/* 관리자 수정/삭제 버튼 */}
             {isAdmin && (
@@ -122,12 +128,12 @@ export function LectureCard({ lecture, userRole, onUpdated, onDeleted }: Lecture
             {canView ? (
               <span className="flex items-center gap-1 text-gray-900 font-semibold group-hover:translate-x-0.5 transition-transform">
                 <PlayCircle className="w-4 h-4 text-carrot" />
-                <span>시청하기</span>
+                <span>입장하기</span>
               </span>
             ) : (
               <span className="flex items-center gap-1 text-gray-400">
                 <Lock className="w-3.5 h-3.5" />
-                <span>잠김</span>
+                <span>입장 제한</span>
               </span>
             )}
           </div>

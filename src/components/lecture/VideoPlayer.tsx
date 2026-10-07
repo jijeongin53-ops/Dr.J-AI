@@ -27,17 +27,25 @@ export function VideoPlayer({
 
   // 권한 부족 시 잠금 안내 화면
   if (!canView) {
+    const roleNameMap: Record<string, string> = {
+      regular: '정회원 이상',
+      vip: 'VIP 회원 전용',
+      admin: '관리자 전용',
+      guest: '준회원 이상',
+    };
+    const requiredRoleText = roleNameMap[minViewRole] || `${minViewRole} 등급 이상`;
+
     return (
       <div className="w-full aspect-video bg-gray-50 rounded-2xl border border-gray-200 flex flex-col items-center justify-center p-6 text-center shadow-inner relative overflow-hidden">
         <div className="w-14 h-14 rounded-full bg-white border border-gray-200 flex items-center justify-center mb-4 text-carrot shadow-sm">
           <Lock className="w-6 h-6" />
         </div>
         <h3 className="text-gray-900 font-bold text-lg mb-1">
-          열람 권한이 제한된 강의입니다
+          입장 권한이 제한된 강의실입니다
         </h3>
         <p className="text-gray-500 text-xs sm:text-sm max-w-md mb-5 leading-relaxed">
-          이 강의는 <span className="text-carrot font-bold uppercase">{minViewRole}</span> 등급 이상 회원만 시청할 수 있습니다.
-          모임장 승인 또는 등급 업그레이드를 요청하세요.
+          이 강의실은 <span className="text-carrot font-bold">{requiredRoleText}</span> 회원만 입장하여 시청할 수 있습니다.
+          로그인이 필요하거나 승인/등급 조정이 필요한 경우 모임장에게 문의해주세요.
         </p>
         <Link
           href="/chat"

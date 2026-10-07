@@ -158,8 +158,14 @@ export default function LectureDetailPage() {
             {lecture.category}
           </span>
           <div className="flex items-center gap-1.5 text-xs text-gray-500 ml-auto">
-            <span>시청 권한:</span>
-            <RoleBadge role={lecture.minViewRole} size="sm" />
+            <span>입장 회원 등급:</span>
+            {lecture.minViewRole === 'guest' ? (
+              <span className="inline-flex items-center font-semibold rounded-full px-2 py-0.5 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">
+                누구나 입장 가능
+              </span>
+            ) : (
+              <RoleBadge role={lecture.minViewRole} size="sm" />
+            )}
           </div>
         </div>
 

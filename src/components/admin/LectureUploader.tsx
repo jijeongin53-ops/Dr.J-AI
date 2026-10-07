@@ -209,16 +209,16 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
 
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                시청 최소 등급 (입장 제어)
+                입장 회원 등급 *
               </label>
               <select
                 value={minViewRole}
                 onChange={(e) => setMinViewRole(e.target.value as MemberRole)}
                 className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 focus:outline-none focus:border-carrot"
               >
-                <option value="guest">준회원 이상 (누구나 시청 가능)</option>
-                <option value="regular">정회원 이상 시청 가능</option>
-                <option value="vip">VIP 회원 전용</option>
+                <option value="guest">누구나 입장 가능 (비회원/준회원 포함)</option>
+                <option value="regular">정회원 이상 입장 가능</option>
+                <option value="vip">VIP 회원 전용 입장</option>
                 <option value="admin">관리자 전용 비공개</option>
               </select>
             </div>

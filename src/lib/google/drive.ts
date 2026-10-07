@@ -56,6 +56,8 @@ export function getDriveDownloadUrl(fileIdOrUrl?: string): string {
  * 사용자의 등급이 필요한 최소 등급을 충족하는지 검증
  */
 export function hasRequiredRole(userRole: MemberRole | undefined | null, requiredRole: MemberRole): boolean {
+  // guest(누구나) 등급인 경우 비로그인 사용자도 모두 입장/열람 가능
+  if (requiredRole === 'guest') return true;
   if (!userRole) return false;
   return (ROLE_HIERARCHY[userRole] ?? 0) >= (ROLE_HIERARCHY[requiredRole] ?? 0);
 }
