@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   getActiveAttendanceSession,
+  getActiveAttendanceSessionAsync,
   startAttendanceSession,
   stopAttendanceSession,
   checkInMember,
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
 
   // 1. 회원 앱에서 현재 활성화된 출석 요청이 있는지 확인 (푸시 배너용)
   if (mode === 'active') {
-    const active = getActiveAttendanceSession();
+    const active = await getActiveAttendanceSessionAsync();
     return NextResponse.json({
       isActive: !!active,
       session: active,
@@ -26,13 +27,14 @@ export async function GET(request: Request) {
   }
 
   // 2. 특정 세션의 전체 회원 출석 명부 조회 (관리자용)
+  const active = await getActiveAttendanceSessionAsync();
   const users = await getUsers();
-  const targetSessionId = sessionId || (getActiveAttendanceSession()?.id ?? 'default');
+  const targetSessionId = sessionId || (active?.id ?? 'default');
   const rosterData = getSessionAttendanceRoster(targetSessionId, users);
 
   return NextResponse.json({
     ...rosterData,
-    activeSession: getActiveAttendanceSession(),
+    activeSession: active,
   });
 }
 

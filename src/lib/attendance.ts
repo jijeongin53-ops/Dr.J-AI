@@ -7,8 +7,34 @@ let sessions: AttendanceSession[] = [];
 let attendanceRecords: AttendanceRecord[] = [];
 
 /**
- * 현재 활성화된 출석 체크 세션 조회
+ * 현재 활성화된 출석 체크 세션 조회 (GAS 동기화 지원, 2초 타임아웃 보호)
  */
+export async function getActiveAttendanceSessionAsync(): Promise<AttendanceSession | null> {
+  if (activeSession) return activeSession;
+
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${gasUrl}?sheet=attendance_session`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.isActive && json.session) {
+          activeSession = json.session;
+          return activeSession;
+        }
+      }
+    } catch (_) {}
+  }
+  return activeSession;
+}
+
 export function getActiveAttendanceSession(): AttendanceSession | null {
   return activeSession;
 }
@@ -56,6 +82,16 @@ export function stopAttendanceSession(): boolean {
     const found = sessions.find((s) => s.id === activeSession?.id);
     if (found) found.isActive = false;
     activeSession = null;
+
+    const gasUrl = getRuntimeGasUrl();
+    if (gasUrl) {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stopAttendance' }),
+      }).catch(() => {});
+    }
+
     return true;
   }
   return false;
