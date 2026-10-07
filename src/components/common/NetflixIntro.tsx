@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Sparkles, FastForward } from 'lucide-react';
+import { FastForward } from 'lucide-react';
 
 /**
  * 넷플릭스 오리지널 시그니처 '두둥~' (Tudum) 사운드 신시사이저
@@ -96,12 +96,10 @@ export function NetflixIntro() {
   const [visible, setVisible] = useState(false);
   const [fadingOut, setFadingOut] = useState(false);
   const [stage, setStage] = useState<'idle' | 'boom' | 'reveal' | 'expand'>('idle');
-  const [waitingInteraction, setWaitingInteraction] = useState(false);
   const introTimerRef = useRef<NodeJS.Timeout[]>([]);
 
   // 인트로 애니메이션 시퀀스 실행
   const triggerIntroSequence = () => {
-    setWaitingInteraction(false);
     setStage('boom');
 
     // '두둥~' 사운드 재생
@@ -128,10 +126,6 @@ export function NetflixIntro() {
     introTimerRef.current.push(t1, t2, t3, t4);
   };
 
-  const handleStartWithClick = () => {
-    triggerIntroSequence();
-  };
-
   const handleSkip = () => {
     introTimerRef.current.forEach((t) => clearTimeout(t));
     setFadingOut(true);
@@ -148,27 +142,8 @@ export function NetflixIntro() {
     if (!hasSeenIntro) {
       sessionStorage.setItem('DR_J_INTRO_SEEN', 'true');
       setVisible(true);
-
-      // 브라우저의 오디오 자동재생 가능 여부 확인
-      try {
-        const AudioContextClass =
-          window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (AudioContextClass) {
-          const testCtx = new AudioContextClass();
-          if (testCtx.state === 'running') {
-            testCtx.close();
-            triggerIntroSequence();
-          } else {
-            testCtx.close();
-            // 브라우저 정책상 사용자 인터랙션 대기
-            setWaitingInteraction(true);
-          }
-        } else {
-          triggerIntroSequence();
-        }
-      } catch (_) {
-        setWaitingInteraction(true);
-      }
+      // 접속 즉시 극적인 인트로 시퀀스 및 사운드 자동 실행
+      triggerIntroSequence();
     }
 
     // 언제든 다시 볼 수 있도록 커스텀 이벤트 등록
@@ -190,10 +165,10 @@ export function NetflixIntro() {
 
   return (
     <div
-      onClick={waitingInteraction ? handleStartWithClick : undefined}
+      onClick={() => playNetflixTudumSound()}
       className={`fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center overflow-hidden transition-opacity duration-700 select-none ${
         fadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      } ${waitingInteraction ? 'cursor-pointer' : ''}`}
+      }`}
       style={{ perspective: '1000px' }}
     >
       {/* 1. 우측 상단 건너뛰기 버튼 */}
@@ -286,28 +261,6 @@ export function NetflixIntro() {
             DR. J&apos;S
           </span>
         </h1>
-
-        {/* 서브타이틀 시네마틱 페이드인 */}
-        <p
-          className={`mt-4 text-xs sm:text-sm font-semibold tracking-[0.25em] text-gray-300 transition-all duration-1000 delay-200 ${
-            stage === 'reveal' || stage === 'expand'
-              ? 'opacity-90 translate-y-0'
-              : 'opacity-0 translate-y-3'
-          }`}
-        >
-          당근 모임 AI 통합 관리 아카데미
-        </p>
-
-        {/* 4. 브라우저 오디오 자동재생 제한 시 터치 유도 가이드 */}
-        {waitingInteraction && (
-          <div className="mt-10 animate-bounce flex flex-col items-center gap-2 p-3 px-5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 text-white cursor-pointer hover:bg-white/20 transition">
-            <div className="flex items-center gap-2 text-xs font-bold text-orange-300">
-              <Volume2 className="w-4 h-4 text-carrot animate-pulse" />
-              <span>화면을 터치하면 극적인 사운드와 함께 시작됩니다</span>
-            </div>
-            <span className="text-[10px] text-gray-400">클릭하여 Dr. J 인트로 입장하기</span>
-          </div>
-        )}
       </div>
 
       {/* 하단 시네마틱 바 */}
