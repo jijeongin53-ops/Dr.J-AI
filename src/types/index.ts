@@ -81,8 +81,8 @@ export const ROLE_HIERARCHY: Record<MemberRole, number> = {
 
 // 등급 한글 레이블
 export const ROLE_LABELS: Record<MemberRole, { name: string; badgeClass: string }> = {
-  admin: { name: '관리자', badgeClass: 'bg-black text-white border border-neutral-700' },
+  admin: { name: '관리자', badgeClass: 'bg-black text-white font-medium' },
   vip: { name: 'VIP 회원', badgeClass: 'bg-carrot text-white font-medium' },
-  regular: { name: '정회원', badgeClass: 'bg-zinc-800 text-zinc-100 border border-zinc-700' },
-  guest: { name: '대기/준회원', badgeClass: 'bg-zinc-900 text-zinc-400 border border-zinc-800' },
+  regular: { name: '정회원', badgeClass: 'bg-gray-100 text-gray-800 border border-gray-300 font-medium' },
+  guest: { name: '대기/준회원', badgeClass: 'bg-gray-50 text-gray-500 border border-gray-200' },
 };

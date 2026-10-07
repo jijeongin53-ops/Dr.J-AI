@@ -2,18 +2,20 @@
 
 import React, { useState } from 'react';
 import { MemberUser } from '@/types';
-import { setCurrentUser } from '@/lib/auth';
-import { initialUsers } from '@/lib/mockData';
+import { setCurrentUser, clearCurrentUser } from '@/lib/auth';
 import { RoleBadge } from '../common/RoleBadge';
 import {
   UserPlus,
   LogIn,
   CheckCircle2,
   AlertCircle,
-  ShieldCheck,
-  ArrowRight,
   Sparkles,
+  ArrowRight,
+  LogOut,
+  BookOpen,
+  MessageSquare,
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface JoinOrLoginFormProps {
   currentUser: MemberUser | null;
@@ -82,7 +84,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         if (onAuthSuccess) {
           onAuthSuccess(data.user);
         } else {
-          setTimeout(() => window.location.reload(), 1500);
+          setTimeout(() => window.location.reload(), 1200);
         }
       }
     } catch (e) {
@@ -130,51 +132,82 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     }
   };
 
-  return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-      {/* 장식용 글로우 효과 */}
-      <div className="absolute top-0 right-0 w-80 h-80 bg-carrot/5 rounded-full blur-3xl pointer-events-none" />
+  const handleLogout = () => {
+    clearCurrentUser();
+    window.location.reload();
+  };
 
-      {/* 이미 로그인되어 있는 경우 상단 안내 배너 */}
-      {currentUser && (
-        <div className="mb-6 p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-zinc-300">
-              현재 <strong className="text-white">{currentUser.name}</strong> ({currentUser.phoneNumber}) 계정으로 접속 중입니다.
-            </span>
-            <RoleBadge role={currentUser.role} size="sm" />
+  // [중요 요구사항 1 해결]: 로그인을 완료했을 때는 로그인 입력 폼이 완전히 사라지고, 깔끔한 회원 카드만 표시됩니다!
+  if (currentUser) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 animate-fadeIn">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
+            <Sparkles className="w-7 h-7" />
           </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="/lectures"
-              className="px-3 py-1 bg-white text-black hover:bg-zinc-200 font-semibold rounded text-[11px] transition"
-            >
-              강의실 가기
-            </a>
-            <button
-              onClick={() => {
-                localStorage.removeItem('daangn_ai_user');
-                window.location.reload();
-              }}
-              className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded text-[11px] transition"
-            >
-              로그아웃
-            </button>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl font-bold text-gray-900">
+                {currentUser.name} 회원님
+              </span>
+              <RoleBadge role={currentUser.role} size="md" />
+              {currentUser.status === 'approved' ? (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  ● 승인 완료
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                  ● 승인 대기 중
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1.5">
+              아이디: <strong className="text-gray-700">{currentUser.name}</strong> | 연락처: <span className="text-gray-700">{currentUser.phoneNumber}</span> | 직업: <span className="text-gray-700">{currentUser.job || '회원'}</span>
+            </p>
           </div>
         </div>
-      )}
 
+        {/* 바로가기 액션 버튼 */}
+        <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
+          <Link
+            href="/lectures"
+            className="flex-1 md:flex-none px-5 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>강의 및 자료실</span>
+          </Link>
+          <Link
+            href="/chat"
+            className="flex-1 md:flex-none px-4 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition"
+          >
+            <MessageSquare className="w-4 h-4 text-carrot" />
+            <span>채팅방</span>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="p-2.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-400 hover:text-red-600 transition"
+            title="로그아웃"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 비로그인 상태일 때: 회원가입 폼이 먼저 최상단에 노출됩니다!
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm relative overflow-hidden">
       {/* 탭 헤더: 회원가입이 먼저 나옴 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-850 pb-5 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5 mb-6">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-carrot" />
-            <h2 className="text-lg font-bold text-white tracking-tight">
+            <span className="w-2.5 h-2.5 rounded-full bg-carrot" />
+            <h2 className="text-lg font-bold text-gray-950 tracking-tight">
               {mode === 'register' ? '당근 AI 모임 회원가입 신청' : '당근 AI 모임 로그인'}
             </h2>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             {mode === 'register'
               ? '가입 후 모임장 승인을 거쳐 전용 강의 시청 및 자료 다운로드가 가능합니다.'
               : '가입하신 성명(아이디)과 연락처(비밀번호)로 로그인하세요.'}
@@ -182,7 +215,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         </div>
 
         {/* 모드 전환 탭 */}
-        <div className="grid grid-cols-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 text-xs w-full sm:w-64 shrink-0">
+        <div className="grid grid-cols-2 p-1 bg-gray-100 rounded-xl text-xs w-full sm:w-64 shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -190,10 +223,10 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               setErrorMsg('');
               setSuccessMsg('');
             }}
-            className={`py-2 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
+            className={`py-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 ${
               mode === 'register'
-                ? 'bg-zinc-800 text-white shadow'
-                : 'text-zinc-400 hover:text-white'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-900'
             }`}
           >
             <UserPlus className="w-3.5 h-3.5 text-carrot" />
@@ -206,10 +239,10 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               setErrorMsg('');
               setSuccessMsg('');
             }}
-            className={`py-2 rounded-lg font-semibold transition flex items-center justify-center gap-1.5 ${
+            className={`py-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 ${
               mode === 'login'
-                ? 'bg-zinc-800 text-white shadow'
-                : 'text-zinc-400 hover:text-white'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-900'
             }`}
           >
             <LogIn className="w-3.5 h-3.5" />
@@ -220,14 +253,14 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
 
       {/* 알림 메시지 */}
       {errorMsg && (
-        <div className="mb-5 p-3.5 bg-red-950/40 border border-red-900 rounded-xl text-xs text-red-300 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+        <div className="mb-5 p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
           <span>{errorMsg}</span>
         </div>
       )}
       {successMsg && (
-        <div className="mb-5 p-3.5 bg-emerald-950/40 border border-emerald-900 rounded-xl text-xs text-emerald-300 flex items-center gap-2 whitespace-pre-line">
-          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+        <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 whitespace-pre-line">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
           <span>{successMsg}</span>
         </div>
       )}
@@ -237,7 +270,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1">
                 성명 (아이디로 사용) *
               </label>
               <input
@@ -246,12 +279,12 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="예: 홍길동"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1">
                 생년월일 *
               </label>
               <input
@@ -260,14 +293,14 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
                 placeholder="예: 1990-01-15 또는 900115"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1">
                 직업 *
               </label>
               <input
@@ -276,12 +309,12 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 value={job}
                 onChange={(e) => setJob(e.target.value)}
                 placeholder="예: 회사원, 마케터, 개발자, 자영업 등"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-zinc-300 mb-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1">
                 연락처 (비밀번호로 사용) *
               </label>
               <input
@@ -290,13 +323,13 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
                 placeholder="예: 010-1234-5678"
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">
+            <label className="block text-xs font-bold text-gray-700 mb-1">
               이메일 *
             </label>
             <input
@@ -305,13 +338,13 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="예: gildong@example.com"
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
             />
           </div>
 
           {/* 약관 동의 */}
           <div className="pt-2">
-            <label className="flex items-start gap-2 cursor-pointer select-none text-xs text-zinc-300">
+            <label className="flex items-start gap-2 cursor-pointer select-none text-xs text-gray-700">
               <input
                 type="checkbox"
                 checked={agreeTerms}
@@ -319,8 +352,8 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 className="mt-0.5 accent-carrot rounded"
               />
               <span>
-                (필수) 하단에 명시된 <strong>[개인정보 수집·이용 및 관리에 관한 약관]</strong>에 동의합니다.
-                <span className="text-zinc-500 block text-[11px] mt-0.5">
+                (필수) 하단에 기재된 <strong>[개인정보 수집·이용 및 관리에 관한 약관]</strong>에 동의합니다.
+                <span className="text-gray-500 block text-[11px] mt-0.5">
                   * 수집 항목: 성명(아이디), 연락처(비밀번호), 생년월일, 직업, 이메일
                 </span>
               </span>
@@ -331,7 +364,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-carrot hover:bg-carrot-hover text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-lg disabled:opacity-50"
+              className="w-full py-3.5 bg-carrot hover:bg-carrot-hover text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-md disabled:opacity-50"
             >
               <UserPlus className="w-4 h-4" />
               <span>{loading ? '가입 신청 처리 중...' : '회원가입 신청하기'}</span>
@@ -341,12 +374,12 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
       ) : (
         /* 2. 로그인 폼 (아이디: 성명 / 비밀번호: 연락처) */
         <form onSubmit={handleLogin} className="space-y-4 max-w-lg mx-auto">
-          <div className="p-3 bg-zinc-900/60 rounded-xl border border-zinc-850 text-xs text-zinc-400">
+          <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-600">
             💡 <strong>로그인 안내:</strong> 아이디는 가입하신 <strong>성명</strong>이며, 비밀번호는 <strong>연락처(휴대폰 번호)</strong>입니다.
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">
+            <label className="block text-xs font-bold text-gray-700 mb-1">
               성명 (아이디) *
             </label>
             <input
@@ -355,12 +388,12 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               value={loginName}
               onChange={(e) => setLoginName(e.target.value)}
               placeholder="가입하신 성명을 입력하세요"
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-zinc-300 mb-1">
+            <label className="block text-xs font-bold text-gray-700 mb-1">
               연락처 (비밀번호) *
             </label>
             <input
@@ -369,7 +402,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               value={loginPhone}
               onChange={(e) => setLoginPhone(e.target.value)}
               placeholder="010-0000-0000"
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+              className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
             />
           </div>
 
@@ -377,7 +410,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-white text-black hover:bg-zinc-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition disabled:opacity-50"
+              className="w-full py-3.5 bg-gray-900 text-white hover:bg-black text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition disabled:opacity-50 shadow-md"
             >
               <LogIn className="w-4 h-4" />
               <span>{loading ? '로그인 중...' : '로그인'}</span>

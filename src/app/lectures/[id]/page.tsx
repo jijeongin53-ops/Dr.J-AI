@@ -9,7 +9,7 @@ import { VideoPlayer } from '@/components/lecture/VideoPlayer';
 import { MaterialList } from '@/components/lecture/MaterialList';
 import { CommentSection } from '@/components/lecture/CommentSection';
 import { RoleBadge } from '@/components/common/RoleBadge';
-import { ArrowLeft, Clock, Calendar, FileText, Share2 } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LectureDetailPage() {
@@ -54,7 +54,7 @@ export default function LectureDetailPage() {
 
   if (loading) {
     return (
-      <div className="py-24 text-center text-xs text-zinc-500">
+      <div className="py-24 text-center text-xs text-gray-400">
         강의 정보를 불러오는 중입니다...
       </div>
     );
@@ -63,10 +63,10 @@ export default function LectureDetailPage() {
   if (!lecture) {
     return (
       <div className="py-24 text-center space-y-4">
-        <p className="text-zinc-400 text-sm">존재하지 않거나 삭제된 강의입니다.</p>
+        <p className="text-gray-500 text-sm">존재하지 않거나 삭제된 강의입니다.</p>
         <Link
           href="/lectures"
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-900 border border-zinc-800 text-white rounded-lg text-xs"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white rounded-xl text-xs font-semibold"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>목록으로 돌아가기</span>
@@ -81,7 +81,7 @@ export default function LectureDetailPage() {
       <div>
         <Link
           href="/lectures"
-          className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 font-semibold transition"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>강의 및 자료실 전체 목록</span>
@@ -100,22 +100,22 @@ export default function LectureDetailPage() {
       </section>
 
       {/* 2. 강의 제목 및 메타 헤더 */}
-      <section className="space-y-4 border-b border-zinc-900 pb-6">
+      <section className="space-y-4 border-b border-gray-200 pb-6">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-gray-100 text-gray-700">
             {lecture.category}
           </span>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-400 ml-auto">
-            <span>시청 최소 등급:</span>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 ml-auto">
+            <span>시청 권한:</span>
             <RoleBadge role={lecture.minViewRole} size="sm" />
           </div>
         </div>
 
-        <h1 className="text-xl sm:text-3xl font-extrabold text-white leading-tight">
+        <h1 className="text-xl sm:text-3xl font-extrabold text-gray-950 leading-tight">
           {lecture.title}
         </h1>
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
           <span className="flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5" />
             등록일: {lecture.createdAt}
@@ -138,10 +138,10 @@ export default function LectureDetailPage() {
         <div className="lg:col-span-2 space-y-8">
           {/* 강의 상세 설명 */}
           <div className="space-y-3">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider text-zinc-300">
+            <h2 className="text-sm font-bold text-gray-900 tracking-tight">
               강의 개요 및 학습 가이드
             </h2>
-            <div className="p-5 rounded-2xl border border-zinc-850 bg-zinc-950 text-xs sm:text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+            <div className="p-6 rounded-2xl border border-gray-200 bg-white shadow-sm text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
               {lecture.description}
             </div>
           </div>
@@ -157,8 +157,8 @@ export default function LectureDetailPage() {
         {/* 우측 사이드바: 첨부 파일 다운로드 섹션 */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-white">강의 실습 & 보충 자료</h3>
-            <span className="text-[11px] text-zinc-500">
+            <h3 className="text-sm font-bold text-gray-900">강의 실습 & 보충 자료</h3>
+            <span className="text-[11px] text-gray-400">
               {lecture.materials?.length || 0}개 파일
             </span>
           </div>
@@ -168,7 +168,7 @@ export default function LectureDetailPage() {
             userRole={currentUser?.role}
           />
 
-          <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-900 text-xs text-zinc-500 leading-relaxed">
+          <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-xs text-gray-500 leading-relaxed">
             💡 <strong>안내:</strong> 고화질 자료 및 소스코드는 VIP 회원 등급에 따라 다운로드가 허용됩니다. 권한이 필요한 경우 모임장에게 요청해주세요.
           </div>
         </div>

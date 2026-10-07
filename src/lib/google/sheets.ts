@@ -93,42 +93,96 @@ export async function getUsers(): Promise<MemberUser[]> {
 }
 
 /**
- * 사용자 추가 (회원가입)
+ * 사용자 추가 (회원가입) - 구글 시트에 자동 영구 저장
  */
-export async function addUser(user: MemberUser): Promise<MemberUser> {
+export async function addUser(user: MemberUser): Promise<{ user: MemberUser; sheetSaved: boolean; error?: string }> {
   inMemoryUsers.push(user);
-  
-  // 구글 시트 쓰기 시도
-  const auth = getGoogleAuth();
-  if (auth) {
+  let sheetSaved = false;
+  let saveError: string | undefined;
+
+  // 1. Google Apps Script Web App URL이 설정되어 있는 경우 (가장 간편하고 안정적인 무인증 웹훅 방식)
+  const gasUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
+  if (gasUrl) {
     try {
-      const sheets = google.sheets({ version: 'v4', auth });
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: GOOGLE_SHEET_ID,
-        range: 'Users!A:K',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [[
-            user.id,
-            user.name,
-            user.phoneNumber,
-            user.birthDate,
-            user.job,
-            user.email,
-            user.carrotNickname || '',
-            user.role,
-            user.status,
-            user.joinedAt,
-            user.note || '',
-          ]],
-        },
+      const res = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addUser',
+          data: {
+            id: user.id,
+            name: user.name,
+            phoneNumber: user.phoneNumber,
+            birthDate: user.birthDate,
+            job: user.job,
+            email: user.email,
+            carrotNickname: user.carrotNickname || '',
+            role: user.role,
+            status: user.status,
+            joinedAt: user.joinedAt,
+            note: user.note || '',
+          },
+        }),
       });
-    } catch (err) {
-      console.error('[Google Sheets] 사용자 추가 오류:', err);
+      if (res.ok) {
+        sheetSaved = true;
+        console.log('[Google Apps Script] 시트에 사용자 저장 성공:', user.name);
+      }
+    } catch (e: any) {
+      console.warn('[Google Apps Script] 웹훅 전송 실패:', e.message);
     }
   }
 
-  return user;
+  // 2. Google Sheets API v4 (Google Cloud 서비스 계정) 방식
+  if (!sheetSaved) {
+    const auth = getGoogleAuth();
+    if (auth) {
+      try {
+        const sheets = google.sheets({ version: 'v4', auth });
+        const rowData = [
+          user.id,
+          user.name,
+          user.phoneNumber,
+          user.birthDate,
+          user.job,
+          user.email,
+          user.carrotNickname || '',
+          user.role,
+          user.status,
+          user.joinedAt,
+          user.note || '',
+        ];
+
+        try {
+          // 'Users' 탭 시도
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: GOOGLE_SHEET_ID,
+            range: 'Users!A:K',
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [rowData] },
+          });
+          sheetSaved = true;
+        } catch (tabErr) {
+          // 'Users' 탭이 없으면 기본 시트 첫 번째 탭에 저장
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: GOOGLE_SHEET_ID,
+            range: 'A:K',
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [rowData] },
+          });
+          sheetSaved = true;
+        }
+        console.log('[Google Sheets API] 구글 시트에 사용자 저장 성공:', user.name);
+      } catch (err: any) {
+        saveError = err.message || 'Google Sheets API 호출 오류';
+        console.error('[Google Sheets API] 사용자 추가 오류:', err);
+      }
+    } else {
+      saveError = 'Google Service Account 환경 변수(GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY) 미설정';
+    }
+  }
+
+  return { user, sheetSaved, error: saveError };
 }
 
 /**

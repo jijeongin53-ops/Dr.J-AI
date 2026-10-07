@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { MemberUser, MemberRole, MemberStatus } from '@/types';
 import { RoleBadge } from '../common/RoleBadge';
-import { Check, X, Shield, UserCheck, AlertTriangle } from 'lucide-react';
+import { UserCheck } from 'lucide-react';
 
 interface MemberManagerProps {
   initialUsers: MemberUser[];
@@ -39,18 +39,18 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-white font-bold text-sm flex items-center gap-2">
+        <h3 className="text-gray-900 font-bold text-sm flex items-center gap-2">
           <UserCheck className="w-4 h-4 text-carrot" />
           당근 모임 회원 승인 및 등급 관리 ({users.length}명)
         </h3>
-        <span className="text-xs text-zinc-500">
+        <span className="text-xs text-gray-400">
           * 변경 사항은 구글 스프레드시트에 자동 연동됩니다.
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950">
-        <table className="w-full text-left text-xs text-zinc-300">
-          <thead className="bg-zinc-900 border-b border-zinc-800 text-[11px] text-zinc-400 uppercase">
+      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <table className="w-full text-left text-xs text-gray-700">
+          <thead className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 uppercase">
             <tr>
               <th className="py-3 px-4">회원 정보 (아이디/비번)</th>
               <th className="py-3 px-4">직업 / 생년월일</th>
@@ -60,44 +60,44 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
               <th className="py-3 px-4 text-right">등급 변경 & 승인</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-850">
+          <tbody className="divide-y divide-gray-100">
             {users.map((u) => {
               const isPending = u.status === 'pending';
               const isLoading = loadingId === u.id;
 
               return (
-                <tr key={u.id} className="hover:bg-zinc-900/50 transition">
+                <tr key={u.id} className="hover:bg-gray-50/70 transition">
                   <td className="py-3 px-4">
-                    <p className="font-semibold text-white">{u.name}</p>
-                    <p className="text-[11px] text-zinc-400">{u.phoneNumber} (PW)</p>
-                    <p className="text-[10px] text-zinc-500">{u.email}</p>
+                    <p className="font-bold text-gray-900">{u.name}</p>
+                    <p className="text-[11px] text-gray-600">{u.phoneNumber} (PW)</p>
+                    <p className="text-[10px] text-gray-400">{u.email}</p>
                   </td>
                   <td className="py-3 px-4">
-                    <p className="text-zinc-200 font-medium">{u.job || '-'}</p>
-                    <p className="text-[10px] text-zinc-500">{u.birthDate || '-'}</p>
+                    <p className="text-gray-800 font-medium">{u.job || '-'}</p>
+                    <p className="text-[10px] text-gray-400">{u.birthDate || '-'}</p>
                   </td>
-                  <td className="py-3 px-4 text-zinc-500">{u.joinedAt}</td>
+                  <td className="py-3 px-4 text-gray-400">{u.joinedAt}</td>
                   <td className="py-3 px-4">
                     <RoleBadge role={u.role} size="sm" />
                   </td>
                   <td className="py-3 px-4">
                     {u.status === 'approved' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                         승인 완료
                       </span>
                     )}
                     {u.status === 'pending' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 font-medium">
+                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-bold">
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
                         승인 대기
                       </span>
                     )}
                     {u.status === 'rejected' && (
-                      <span className="text-[11px] text-red-400">거절됨</span>
+                      <span className="text-[11px] text-red-500">거절됨</span>
                     )}
                     {u.status === 'blocked' && (
-                      <span className="text-[11px] text-zinc-600">차단됨</span>
+                      <span className="text-[11px] text-gray-400">차단됨</span>
                     )}
                   </td>
                   <td className="py-3 px-4 text-right">
@@ -107,14 +107,14 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
                           <button
                             onClick={() => handleUpdate(u.id, 'regular', 'approved')}
                             disabled={isLoading}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-semibold transition"
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold transition shadow-sm"
                           >
                             정회원 승인
                           </button>
                           <button
                             onClick={() => handleUpdate(u.id, 'guest', 'rejected')}
                             disabled={isLoading}
-                            className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-[11px] transition"
+                            className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-[11px] transition"
                           >
                             반려
                           </button>
@@ -126,7 +126,7 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
                           onChange={(e) =>
                             handleUpdate(u.id, e.target.value as MemberRole, u.status)
                           }
-                          className="bg-zinc-900 border border-zinc-700 text-white text-xs rounded px-2 py-1 focus:outline-none"
+                          className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-carrot"
                         >
                           <option value="guest">준회원/대기</option>
                           <option value="regular">정회원</option>

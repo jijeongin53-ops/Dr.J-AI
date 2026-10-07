@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --background: #09090b;
-  --foreground: #fafafa;
+  --background: #ffffff;
+  --foreground: #111827;
 }
 
 body {
@@ -20,17 +20,17 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: #f3f4f6;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #d1d5db;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #9ca3af;
 }
 
 /* 카드 및 박스 보더 부드러운 효과 */
 .border-zinc-850 {
-  border-color: #202023;
+  border-color: #e5e7eb;
 }

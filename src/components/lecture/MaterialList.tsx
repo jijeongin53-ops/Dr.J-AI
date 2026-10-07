@@ -71,10 +71,10 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
     <div className="space-y-3">
       {alertMessage && (
         <div
-          className={`p-3 rounded-lg text-xs flex items-center gap-2 border ${
+          className={`p-3 rounded-xl text-xs flex items-center gap-2 border ${
             alertMessage.type === 'error'
-              ? 'bg-red-950/40 border-red-900 text-red-300'
-              : 'bg-emerald-950/40 border-emerald-900 text-emerald-300'
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
           }`}
         >
           {alertMessage.type === 'error' ? (
@@ -86,22 +86,22 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
         </div>
       )}
 
-      <div className="divide-y divide-zinc-800/80 border border-zinc-800 rounded-xl overflow-hidden bg-zinc-950">
+      <div className="divide-y divide-gray-100 border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
         {materials.map((mat) => {
           const canDownload = hasRequiredRole(userRole, mat.minDownloadRole);
 
           return (
             <div
               key={mat.id}
-              className="p-4 flex items-center justify-between gap-4 hover:bg-zinc-900/60 transition"
+              className="p-4 flex items-center justify-between gap-4 hover:bg-gray-50/80 transition"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0">
-                  <FileText className="w-4 h-4 text-zinc-300" />
+                <div className="w-9 h-9 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0 text-gray-700">
+                  <FileText className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{mat.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-zinc-500">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{mat.name}</p>
+                  <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
                     {mat.fileSize && <span>{mat.fileSize}</span>}
                     <span>•</span>
                     <span className="flex items-center gap-1">
@@ -115,12 +115,12 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
                 <button
                   onClick={() => handleDownload(mat)}
                   disabled={downloadingId === mat.id}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition ${
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
                     canDownload
-                      ? 'bg-zinc-100 hover:bg-white text-black font-semibold'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                      ? 'bg-gray-900 hover:bg-black text-white shadow-sm'
+                      : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
-                  title={canDownload ? '구글 드라이브에서 다운로드' : '다운로드 권한 필요'}
+                  title={canDownload ? '자료 다운로드' : '다운로드 권한 필요'}
                 >
                   {canDownload ? (
                     <>
@@ -129,7 +129,7 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
                     </>
                   ) : (
                     <>
-                      <Lock className="w-3.5 h-3.5 text-zinc-500" />
+                      <Lock className="w-3.5 h-3.5 text-gray-400" />
                       <span>다운로드 잠김</span>
                     </>
                   )}

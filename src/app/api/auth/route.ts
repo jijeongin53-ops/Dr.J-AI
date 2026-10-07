@@ -91,9 +91,11 @@ export async function POST(request: Request) {
       note: note || '웹 신규 가입 회원',
     };
 
-    const saved = await addUser(newUser);
+    const { user: savedUser, sheetSaved, error: sheetError } = await addUser(newUser);
     return NextResponse.json({
-      user: saved,
+      user: savedUser,
+      sheetSaved,
+      sheetError,
       message: '회원가입 신청이 완료되었습니다! 관리자 승인 후 모든 권한이 활성화됩니다.',
     });
   } catch (error) {
