@@ -26,14 +26,10 @@ export function Navbar() {
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
-    // 초기 로딩 시 기본 로그인 상태 설정 (없으면 관리자 계정으로 자동 세팅하여 바로 모든 기능 확인 가능)
+    // 저장된 로그인 사용자 상태 불러오기
     const current = getCurrentUser();
     if (current) {
       setUser(current);
-    } else {
-      const defaultAdmin = initialUsers[0]; // 관리자
-      setCurrentUser(defaultAdmin);
-      setUser(defaultAdmin);
     }
   }, []);
 

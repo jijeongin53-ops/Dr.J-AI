@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { initialLectures } from '@/lib/mockData';
 import { LectureCard } from '@/components/lecture/LectureCard';
 import { RoleBadge } from '@/components/common/RoleBadge';
+import { JoinOrLoginForm } from '@/components/auth/JoinOrLoginForm';
+import { PrivacyPolicy } from '@/components/common/PrivacyPolicy';
 import {
   FolderOpen,
   FileSpreadsheet,
@@ -16,6 +18,7 @@ import {
   Video,
   Download,
   MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 import { GOOGLE_DRIVE_FOLDER_URL, GOOGLE_SHEET_URL } from '@/lib/constants';
 
@@ -36,25 +39,33 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-16 py-6">
-      {/* 1. 히어로 섹션 */}
-      <section className="relative rounded-3xl border border-zinc-800 bg-zinc-950 p-8 sm:p-14 overflow-hidden text-center sm:text-left">
+    <div className="space-y-14 py-4">
+      {/* 1. 최상단 회원가입 & 로그인 란 (사용자 요청: 회원 가입란이 가장 먼저 나와야 함) */}
+      <section id="auth-section">
+        <JoinOrLoginForm
+          currentUser={currentUser}
+          onAuthSuccess={(user) => setCurrentUser(user)}
+        />
+      </section>
+
+      {/* 2. 히어로 배너 섹션 */}
+      <section className="relative rounded-3xl border border-zinc-800 bg-zinc-950 p-8 sm:p-12 overflow-hidden text-center sm:text-left">
         <div className="absolute top-0 right-0 -mt-12 -mr-12 w-96 h-96 bg-carrot/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="max-w-2xl space-y-5 relative z-10">
+        <div className="max-w-2xl space-y-4 relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900 text-xs text-zinc-300">
             <span className="w-2 h-2 rounded-full bg-carrot animate-pulse" />
             <span>당근 이웃들과 함께하는 AI 실무 교육 플랫폼</span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-white leading-tight">
             배우고, 실습하고, <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-zinc-200 to-carrot">
               자료를 공유하는 모임
             </span>
           </h1>
 
-          <p className="text-sm sm:text-base text-zinc-400 leading-relaxed">
+          <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed">
             모임원이 진행한 지난 강의 영상 실시간 스트리밍, 회원 등급별 실무 자료 다운로드,
             검증된 회원들과 나누는 승인제 실시간 채팅을 한곳에서 이용하세요.
           </p>
@@ -62,24 +73,24 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center gap-3 pt-2 justify-center sm:justify-start">
             <Link
               href="/lectures"
-              className="px-6 py-3 bg-white text-black hover:bg-zinc-200 font-bold text-sm rounded-xl flex items-center gap-2 transition shadow"
+              className="px-5 py-2.5 bg-white text-black hover:bg-zinc-200 font-bold text-xs rounded-xl flex items-center gap-2 transition shadow"
             >
               <span>강의 및 자료실 입장</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
 
             <Link
               href="/chat"
-              className="px-6 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-sm rounded-xl border border-zinc-800 flex items-center gap-2 transition"
+              className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-xs rounded-xl border border-zinc-800 flex items-center gap-2 transition"
             >
-              <MessageSquare className="w-4 h-4 text-carrot" />
+              <MessageSquare className="w-3.5 h-3.5 text-carrot" />
               <span>회원 전용 채팅방</span>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* 2. 구글 클라우드 연동 상태 배너 */}
+      {/* 3. 구글 클라우드 연동 상태 배너 */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <a
           href={GOOGLE_DRIVE_FOLDER_URL}
@@ -93,7 +104,7 @@ export default function HomePage() {
           <div>
             <div className="flex items-center gap-2 text-white font-bold text-sm">
               <span>구글 드라이브 스토리지 연동</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
+              <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 font-mono">
                 1dFvRKio...
               </span>
             </div>
@@ -115,7 +126,7 @@ export default function HomePage() {
           <div>
             <div className="flex items-center gap-2 text-white font-bold text-sm">
               <span>구글 스프레드시트 데이터베이스</span>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
+              <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 font-mono">
                 1aEh870Z...
               </span>
             </div>
@@ -126,11 +137,11 @@ export default function HomePage() {
         </a>
       </section>
 
-      {/* 3. 회원 등급 체계 & 권한 안내 */}
+      {/* 4. 회원 등급 체계 & 권한 안내 */}
       <section className="space-y-6">
         <div className="border-b border-zinc-900 pb-3">
-          <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-carrot" />
+          <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-carrot" />
             회원 등급 및 권한 체계
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
@@ -204,12 +215,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 4. 최신 등록 강의 목록 */}
+      {/* 5. 최신 등록 강의 목록 */}
       <section className="space-y-6">
         <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
           <div>
-            <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-              <Video className="w-5 h-5 text-carrot" />
+            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+              <Video className="w-4 h-4 text-carrot" />
               최근 업로드 강의 & 자료
             </h2>
             <p className="text-xs text-zinc-400 mt-0.5">
@@ -235,6 +246,11 @@ export default function HomePage() {
             />
           ))}
         </div>
+      </section>
+
+      {/* 6. 메인 하단: 개인정보 수집 및 활용, 관리에 대한 약관 (사용자 요청 사항) */}
+      <section id="privacy-section">
+        <PrivacyPolicy />
       </section>
     </div>
   );

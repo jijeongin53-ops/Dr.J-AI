@@ -7,13 +7,15 @@ export type MemberStatus = 'pending' | 'approved' | 'rejected' | 'blocked';
 // 회원 인터페이스
 export interface MemberUser {
   id: string;
-  email: string;
-  name: string;
-  carrotNickname: string; // 당근 닉네임
+  name: string; // 성명 (로그인 아이디로 사용)
+  phoneNumber: string; // 연락처 (로그인 비밀번호로 사용)
+  birthDate: string; // 생년월일 (YYYY-MM-DD or 6/8자리)
+  job: string; // 직업
+  email: string; // 이메일
+  carrotNickname?: string; // 당근 닉네임 (선택)
   role: MemberRole;
   status: MemberStatus;
   joinedAt: string;
-  phoneNumber?: string;
   note?: string; // 모임장 메모
 }
 

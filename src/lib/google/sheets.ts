@@ -65,14 +65,16 @@ export async function getSheetData<T>(sheetName: string, fallbackData: T[]): Pro
     if (sheetName === 'Users') {
       return rows.map((r) => ({
         id: r[0] || '',
-        email: r[1] || '',
-        name: r[2] || '',
-        carrotNickname: r[3] || '',
-        role: (r[4] as any) || 'guest',
-        status: (r[5] as any) || 'pending',
-        joinedAt: r[6] || '',
-        phoneNumber: r[7] || '',
-        note: r[8] || '',
+        name: r[1] || '',
+        phoneNumber: r[2] || '',
+        birthDate: r[3] || '',
+        job: r[4] || '',
+        email: r[5] || '',
+        carrotNickname: r[6] || r[1] || '',
+        role: (r[7] as any) || 'guest',
+        status: (r[8] as any) || 'pending',
+        joinedAt: r[9] || '',
+        note: r[10] || '',
       })) as unknown as T[];
     }
 
@@ -103,18 +105,20 @@ export async function addUser(user: MemberUser): Promise<MemberUser> {
       const sheets = google.sheets({ version: 'v4', auth });
       await sheets.spreadsheets.values.append({
         spreadsheetId: GOOGLE_SHEET_ID,
-        range: 'Users!A:I',
+        range: 'Users!A:K',
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [[
             user.id,
-            user.email,
             user.name,
-            user.carrotNickname,
+            user.phoneNumber,
+            user.birthDate,
+            user.job,
+            user.email,
+            user.carrotNickname || '',
             user.role,
             user.status,
             user.joinedAt,
-            user.phoneNumber || '',
             user.note || '',
           ]],
         },

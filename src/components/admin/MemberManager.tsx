@@ -52,8 +52,8 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
         <table className="w-full text-left text-xs text-zinc-300">
           <thead className="bg-zinc-900 border-b border-zinc-800 text-[11px] text-zinc-400 uppercase">
             <tr>
-              <th className="py-3 px-4">회원 정보</th>
-              <th className="py-3 px-4">당근 닉네임</th>
+              <th className="py-3 px-4">회원 정보 (아이디/비번)</th>
+              <th className="py-3 px-4">직업 / 생년월일</th>
               <th className="py-3 px-4">가입일</th>
               <th className="py-3 px-4">현재 등급</th>
               <th className="py-3 px-4">상태</th>
@@ -69,13 +69,12 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
                 <tr key={u.id} className="hover:bg-zinc-900/50 transition">
                   <td className="py-3 px-4">
                     <p className="font-semibold text-white">{u.name}</p>
-                    <p className="text-[11px] text-zinc-500">{u.email}</p>
-                    {u.phoneNumber && (
-                      <p className="text-[10px] text-zinc-600">{u.phoneNumber}</p>
-                    )}
+                    <p className="text-[11px] text-zinc-400">{u.phoneNumber} (PW)</p>
+                    <p className="text-[10px] text-zinc-500">{u.email}</p>
                   </td>
-                  <td className="py-3 px-4 font-medium text-white">
-                    {u.carrotNickname}
+                  <td className="py-3 px-4">
+                    <p className="text-zinc-200 font-medium">{u.job || '-'}</p>
+                    <p className="text-[10px] text-zinc-500">{u.birthDate || '-'}</p>
                   </td>
                   <td className="py-3 px-4 text-zinc-500">{u.joinedAt}</td>
                   <td className="py-3 px-4">
