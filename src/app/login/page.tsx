@@ -1,0 +1,289 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { initialUsers } from '@/lib/mockData';
+import { setCurrentUser } from '@/lib/auth';
+import { RoleBadge } from '@/components/common/RoleBadge';
+import { LogIn, UserPlus, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [tab, setTab] = useState<'login' | 'register'>('login');
+
+  // 로그인 폼 상태
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // 회원가입 폼 상태
+  const [regEmail, setRegEmail] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regCarrotNickname, setRegCarrotNickname] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regNote, setRegNote] = useState('');
+  const [regSuccess, setRegSuccess] = useState('');
+  const [regError, setRegError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // 일반 로그인 처리
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+
+    try {
+      const res = await fetch(`/api/auth?email=${encodeURIComponent(loginEmail.trim())}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setLoginError(data.error || '이메일을 찾을 수 없습니다.');
+        return;
+      }
+
+      setCurrentUser(data.user);
+      router.push('/lectures');
+    } catch (err) {
+      setLoginError('로그인 처리 중 네트워크 오류가 발생했습니다.');
+    }
+  };
+
+  // 회원가입 처리
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError('');
+    setRegSuccess('');
+
+    if (!regEmail || !regName || !regCarrotNickname) {
+      setRegError('이메일, 실명, 당근 닉네임은 필수입니다.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: regEmail.trim(),
+          name: regName.trim(),
+          carrotNickname: regCarrotNickname.trim(),
+          phoneNumber: regPhone.trim(),
+          note: regNote.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setRegError(data.error || '가입 실패');
+      } else {
+        setRegSuccess('회원가입 신청이 완료되었습니다! 모임장 승인 대기 상태입니다.');
+        setCurrentUser(data.user);
+        setTimeout(() => {
+          router.push('/lectures');
+        }, 1500);
+      }
+    } catch (err) {
+      setRegError('가입 신청 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 빠른 데모 계정 로그인
+  const handleFastLogin = (user: (typeof initialUsers)[0]) => {
+    setCurrentUser(user);
+    router.push('/lectures');
+  };
+
+  return (
+    <div className="max-w-md mx-auto py-12 space-y-6">
+      <div className="text-center space-y-2">
+        <div className="inline-flex w-10 h-10 rounded-full bg-carrot items-center justify-center text-white font-bold text-lg mb-2">
+          당
+        </div>
+        <h1 className="text-2xl font-black text-white tracking-tight">
+          당근 AI 모임 회원 센터
+        </h1>
+        <p className="text-xs text-zinc-400">
+          강의 시청, 자료 다운로드 및 승인 채팅을 위한 전용 공간입니다.
+        </p>
+      </div>
+
+      {/* 탭 버튼 */}
+      <div className="grid grid-cols-2 p-1 bg-zinc-900 rounded-xl border border-zinc-800 text-xs">
+        <button
+          onClick={() => setTab('login')}
+          className={`py-2 rounded-lg font-medium transition ${
+            tab === 'login'
+              ? 'bg-zinc-800 text-white shadow'
+              : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          로그인
+        </button>
+        <button
+          onClick={() => setTab('register')}
+          className={`py-2 rounded-lg font-medium transition ${
+            tab === 'register'
+              ? 'bg-zinc-800 text-white shadow'
+              : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          신규 회원가입 신청
+        </button>
+      </div>
+
+      {/* 카드 본체 */}
+      <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+        {tab === 'login' ? (
+          <form onSubmit={handleLogin} className="space-y-4">
+            {loginError && (
+              <div className="p-3 bg-red-950/40 border border-red-900 rounded-lg text-xs text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                등록된 이메일 계정
+              </label>
+              <input
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="예: admin@daangn.ai"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 font-bold text-xs rounded-lg transition"
+            >
+              로그인
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleRegister} className="space-y-3">
+            {regError && (
+              <div className="p-3 bg-red-950/40 border border-red-900 rounded-lg text-xs text-red-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{regError}</span>
+              </div>
+            )}
+            {regSuccess && (
+              <div className="p-3 bg-emerald-950/40 border border-emerald-900 rounded-lg text-xs text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>{regSuccess}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                이메일 *
+              </label>
+              <input
+                type="email"
+                required
+                value={regEmail}
+                onChange={(e) => setRegEmail(e.target.value)}
+                placeholder="이메일 주소 입력"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  이름(실명) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="홍길동"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-300 mb-1">
+                  당근 닉네임 *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={regCarrotNickname}
+                  onChange={(e) => setRegCarrotNickname(e.target.value)}
+                  placeholder="당근 닉네임"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                연락처 (선택)
+              </label>
+              <input
+                type="tel"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                placeholder="010-0000-0000"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-zinc-300 mb-1">
+                가입 동기 & 하고 싶은 말
+              </label>
+              <textarea
+                rows={2}
+                value={regNote}
+                onChange={(e) => setRegNote(e.target.value)}
+                placeholder="어떤 AI 강의에 관심이 있으신가요?"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 resize-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-2.5 bg-carrot hover:bg-carrot-hover text-white font-bold text-xs rounded-lg transition disabled:opacity-50 mt-2"
+            >
+              {loading ? '신청 중...' : '가입 신청하기'}
+            </button>
+          </form>
+        )}
+
+        {/* 빠른 테스트 계정 체험 섹션 */}
+        <div className="mt-8 pt-6 border-t border-zinc-850 space-y-3">
+          <p className="text-[11px] font-semibold text-zinc-400">
+            ⚡ 빠른 테스트 로그인 (1초 접속):
+          </p>
+          <div className="space-y-1.5">
+            {initialUsers.map((u) => (
+              <button
+                key={u.id}
+                onClick={() => handleFastLogin(u)}
+                className="w-full p-2 bg-zinc-900 hover:bg-zinc-850 rounded-lg text-xs flex items-center justify-between transition border border-zinc-800"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-white">{u.name}</span>
+                  <span className="text-zinc-500 text-[11px]">({u.carrotNickname})</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <RoleBadge role={u.role} size="sm" />
+                  <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
