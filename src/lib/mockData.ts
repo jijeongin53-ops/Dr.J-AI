@@ -3,6 +3,19 @@ import { MemberUser, Lecture, Comment, ChatMessage } from '@/types';
 // 초기 기본 더미 사용자 데이터 (구글 시트 연동 전 또는 로컬 테스트용)
 export const initialUsers: MemberUser[] = [
   {
+    id: 'user_admin_jjy',
+    name: '지정인',
+    phoneNumber: '010-8203-0046',
+    birthDate: '1970-01-01',
+    job: '사업자 / 모임장',
+    email: 'admin@daangn-ai.kr',
+    carrotNickname: '지정인',
+    role: 'admin',
+    status: 'approved',
+    joinedAt: '2025-01-01',
+    note: '당근 AI 모임 최고 운영자 및 관리자',
+  },
+  {
     id: 'user_admin',
     name: '모임장',
     phoneNumber: '010-1234-5678',

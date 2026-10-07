@@ -14,6 +14,7 @@ import {
   LogOut,
   BookOpen,
   MessageSquare,
+  ShieldAlert,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -195,10 +196,10 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         </div>
 
         {/* 바로가기 액션 버튼 */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
           <Link
             href="/lectures"
-            className="flex-1 md:flex-none px-5 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+            className="flex-1 md:flex-none px-4 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
           >
             <BookOpen className="w-4 h-4" />
             <span>강의 및 자료실</span>
@@ -209,6 +210,14 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
           >
             <MessageSquare className="w-4 h-4 text-carrot" />
             <span>채팅방</span>
+          </Link>
+          {/* 모임장/운영자 관리자 센터 버튼 */}
+          <Link
+            href="/admin"
+            className="flex-1 md:flex-none px-4 py-2.5 bg-carrot hover:bg-orange-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+          >
+            <ShieldAlert className="w-4 h-4" />
+            <span>관리자 센터</span>
           </Link>
           <button
             onClick={handleLogout}

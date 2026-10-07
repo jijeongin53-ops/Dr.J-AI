@@ -82,19 +82,17 @@ export function Navbar() {
                 승인 채팅방
               </Link>
 
-              {user?.role === 'admin' && (
-                <Link
-                  href="/admin"
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    pathname === '/admin'
-                      ? 'bg-carrot text-white font-semibold'
-                      : 'text-carrot hover:bg-orange-50'
-                  }`}
-                >
-                  <ShieldAlert className="w-4 h-4" />
-                  관리자 센터
-                </Link>
-              )}
+              <Link
+                href="/admin"
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  pathname === '/admin'
+                    ? 'bg-carrot text-white font-semibold'
+                    : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <ShieldAlert className="w-4 h-4 text-carrot" />
+                <span>관리자 센터</span>
+              </Link>
             </nav>
           </div>
 

@@ -39,8 +39,9 @@ export default function AdminPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // 비관리자 접근 제한
-  if (!loading && currentUser?.role !== 'admin') {
+  // 비관리자 접근 제한 (모임장 본인 지정인 님 또는 admin 권한 허용)
+  const isAuthorized = currentUser?.role === 'admin' || currentUser?.name === '지정인' || currentUser?.phoneNumber?.includes('82030046');
+  if (!loading && !isAuthorized) {
     return (
       <div className="py-24 text-center max-w-md mx-auto space-y-4">
         <div className="w-12 h-12 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mx-auto text-red-500">
@@ -49,7 +50,7 @@ export default function AdminPage() {
         <h2 className="text-gray-900 font-bold text-lg">관리자 권한이 필요합니다</h2>
         <p className="text-xs text-gray-500 leading-relaxed">
           이 페이지는 모임장(Admin) 전용 관리 대시보드입니다. <br />
-          상단 우측의 계정 스위처에서 <strong>[모임장]</strong> 계정을 선택하시면 즉시 관리 기능을 테스트할 수 있습니다.
+          상단 우측의 계정 스위처에서 <strong>[모임장]</strong> 계정을 선택하시거나 모임장 계정으로 로그인해 주세요.
         </p>
       </div>
     );

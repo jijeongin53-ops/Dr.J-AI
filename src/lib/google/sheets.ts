@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { MemberUser, Lecture, Comment, ChatMessage } from '@/types';
-import { GOOGLE_SHEET_ID } from '../constants';
+import { GOOGLE_SHEET_ID, GOOGLE_APPS_SCRIPT_DEFAULT_URL } from '../constants';
 
 // 구글 인증 클라이언트 생성 (서비스 계정)
 function getGoogleAuth() {
@@ -100,7 +100,7 @@ export function setRuntimeGasUrl(url: string) {
 }
 
 export function getRuntimeGasUrl(): string {
-  return runtimeGasUrl || process.env.GOOGLE_APPS_SCRIPT_URL || '';
+  return runtimeGasUrl || process.env.GOOGLE_APPS_SCRIPT_URL || GOOGLE_APPS_SCRIPT_DEFAULT_URL;
 }
 
 /**

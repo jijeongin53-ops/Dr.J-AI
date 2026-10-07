@@ -31,6 +31,13 @@ export async function GET(request: Request) {
         { status: 404 }
       );
     }
+
+    // 모임장(지정인) 계정은 항상 최고 관리자(admin) 및 승인 권한 부여
+    if (user.name.trim() === '지정인' || cleanPhone.includes('82030046')) {
+      user.role = 'admin';
+      user.status = 'approved';
+    }
+
     return NextResponse.json({ user });
   }
 

@@ -3,6 +3,7 @@ export const GOOGLE_DRIVE_FOLDER_ID = '1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo';
 export const GOOGLE_DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo?usp=drive_link';
 export const GOOGLE_SHEET_ID = '1aEh870ZH6ktUVbGJQlU66aRbzKxQ59YOXCGt2FZGWdA';
 export const GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1aEh870ZH6ktUVbGJQlU66aRbzKxQ59YOXCGt2FZGWdA/edit?gid=0#gid=0';
+export const GOOGLE_APPS_SCRIPT_DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbykfP5_Qkk6CsPYicgxFgrrfsbhSvs7PsV0UbHtmZfXXsLxlY2ecnyFPtraidukGpm7TQ/exec';
 
 // 당근 모임 정보
 export const COMMUNITY_INFO = {
