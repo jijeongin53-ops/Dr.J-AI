@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { initialUsers, initialLectures } from '@/lib/mockData';
 import { MemberManager } from '@/components/admin/MemberManager';
 import { LectureUploader } from '@/components/admin/LectureUploader';
+import { GoogleSheetConnector } from '@/components/admin/GoogleSheetConnector';
 import {
   ShieldAlert,
   Users,
@@ -119,6 +120,9 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* 구글 스프레드시트 1분 자동 연동 설정기 */}
+      <GoogleSheetConnector />
 
       {/* 강의 업로드 컴포넌트 */}
       <LectureUploader

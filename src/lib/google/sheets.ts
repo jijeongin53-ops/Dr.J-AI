@@ -92,6 +92,17 @@ export async function getUsers(): Promise<MemberUser[]> {
   return inMemoryUsers;
 }
 
+// 전역 GAS Webhook URL (서버 런타임 및 관리자 입력 지원)
+let runtimeGasUrl: string = process.env.GOOGLE_APPS_SCRIPT_URL || '';
+
+export function setRuntimeGasUrl(url: string) {
+  runtimeGasUrl = url.trim();
+}
+
+export function getRuntimeGasUrl(): string {
+  return runtimeGasUrl || process.env.GOOGLE_APPS_SCRIPT_URL || '';
+}
+
 /**
  * 사용자 추가 (회원가입) - 구글 시트에 자동 영구 저장
  */
@@ -101,7 +112,7 @@ export async function addUser(user: MemberUser): Promise<{ user: MemberUser; she
   let saveError: string | undefined;
 
   // 1. Google Apps Script Web App URL이 설정되어 있는 경우 (가장 간편하고 안정적인 무인증 웹훅 방식)
-  const gasUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
+  const gasUrl = getRuntimeGasUrl();
   if (gasUrl) {
     try {
       const res = await fetch(gasUrl, {
@@ -127,8 +138,11 @@ export async function addUser(user: MemberUser): Promise<{ user: MemberUser; she
       if (res.ok) {
         sheetSaved = true;
         console.log('[Google Apps Script] 시트에 사용자 저장 성공:', user.name);
+      } else {
+        saveError = `GAS 응답 오류 (${res.status})`;
       }
     } catch (e: any) {
+      saveError = e.message || 'GAS 통신 에러';
       console.warn('[Google Apps Script] 웹훅 전송 실패:', e.message);
     }
   }

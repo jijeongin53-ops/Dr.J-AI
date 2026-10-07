@@ -77,6 +77,33 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
       if (!res.ok) {
         setErrorMsg(data.error || '회원가입에 실패했습니다.');
       } else {
+        // 클라이언트 측 구글 시트 웹훅 직접 백업 전송 (설정된 경우)
+        try {
+          const clientGasUrl = localStorage.getItem('DR_J_GAS_URL');
+          if (clientGasUrl) {
+            fetch(clientGasUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'addUser',
+                data: {
+                  id: data.user?.id || `user_${Date.now()}`,
+                  name: name.trim(),
+                  phoneNumber: phoneNumber.trim(),
+                  birthDate: birthDate.trim(),
+                  job: job.trim(),
+                  email: email.trim(),
+                  role: 'guest',
+                  status: 'pending',
+                  joinedAt: new Date().toISOString().split('T')[0],
+                  note: '웹 신규 가입 회원',
+                },
+              }),
+            }).catch(() => {});
+          }
+        } catch (_) {}
+
         setSuccessMsg(
           '🎉 회원가입 신청이 완료되었습니다! (아이디: 성명 / 비밀번호: 연락처)\n모임장 승인 대기 상태로 등록되었습니다.'
         );
