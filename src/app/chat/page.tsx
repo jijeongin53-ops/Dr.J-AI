@@ -20,10 +20,10 @@ export default function ChatPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-carrot" />
-            당근 모임 회원 승인 채팅방
+            Dr. J&apos;s 회원 승인 채팅방
           </h1>
           <p className="text-xs text-gray-500 mt-1">
-            승인된 당근 AI 모임 회원들만 참여할 수 있는 실시간 정보 교류 및 질문 공간입니다.
+            승인된 Dr. J&apos;s 회원들만 참여할 수 있는 실시간 정보 교류 및 질문 공간입니다.
           </p>
         </div>
       </div>

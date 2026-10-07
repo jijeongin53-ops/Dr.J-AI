@@ -46,7 +46,7 @@ export default function LecturesPage() {
             강의 및 교육 자료실
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            당근 모임 회원들을 위해 정기적으로 업로드되는 AI 실무 강의 및 구글 드라이브 자료 저장소입니다.
+            Dr. J&apos;s 회원들을 위해 정기적으로 업로드되는 AI 실무 강의 및 구글 드라이브 자료 저장소입니다.
           </p>
         </div>
 

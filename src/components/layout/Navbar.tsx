@@ -12,8 +12,6 @@ import {
   ShieldAlert,
   ChevronDown,
   LogOut,
-  User,
-  Settings,
 } from 'lucide-react';
 
 export function Navbar() {
@@ -23,11 +21,18 @@ export function Navbar() {
   const [statusModalOpen, setStatusModalOpen] = useState(false);
 
   useEffect(() => {
-    // 저장된 로그인 사용자 상태 불러오기
-    const current = getCurrentUser();
-    if (current) {
-      setUser(current);
-    }
+    // 저장된 로그인 사용자 상태 불러오기 및 실시간 동기화
+    const syncUser = () => {
+      setUser(getCurrentUser());
+    };
+    syncUser();
+
+    window.addEventListener('storage', syncUser);
+    window.addEventListener('authChange', syncUser);
+    return () => {
+      window.removeEventListener('storage', syncUser);
+      window.removeEventListener('authChange', syncUser);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -41,12 +46,12 @@ export function Navbar() {
     <>
       <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* 로고 영역 */}
+          {/* 로고 영역 (Dr. J's 로 변경) */}
           <div className="flex items-center gap-8">
             <Link href="/" className="flex items-center gap-2 group">
               <span className="w-2.5 h-2.5 rounded-full bg-carrot" />
               <span className="font-bold text-lg tracking-tight text-gray-950 group-hover:text-carrot transition-colors">
-                당근 AI 모임
+                Dr. J&apos;s
               </span>
               <span className="text-xs text-gray-400 font-mono hidden sm:inline">Hub</span>
             </Link>
@@ -89,7 +94,7 @@ export function Navbar() {
             </nav>
           </div>
 
-          {/* 우측 영역: [회원 현황 아이콘] + 계정 버튼 (드라이브/시트DB 링크 제거됨) */}
+          {/* 우측 영역: [회원 현황 아이콘] + 계정 버튼 / 로그인 / 로그아웃 */}
           <div className="flex items-center gap-2 sm:gap-3">
             {/* 회원 현황 아이콘 버튼 */}
             <button
@@ -101,17 +106,29 @@ export function Navbar() {
               <span>회원 현황</span>
             </button>
 
-            {/* 계정 프로필 & 스위처 드롭다운 */}
-            <div className="relative">
+            {/* 계정 프로필 & 로그인/로그아웃 전환 영역 */}
+            <div className="relative flex items-center gap-2">
               {user ? (
-                <button
-                  onClick={() => setSwitcherOpen(!switcherOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 hover:border-gray-300 text-xs text-gray-900 transition"
-                >
-                  <span className="font-semibold">{user.name}</span>
-                  <RoleBadge role={user.role} size="sm" />
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                </button>
+                <>
+                  <button
+                    onClick={() => setSwitcherOpen(!switcherOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 hover:border-gray-300 text-xs text-gray-900 transition"
+                  >
+                    <span className="font-semibold">{user.name}</span>
+                    <RoleBadge role={user.role} size="sm" />
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+
+                  {/* 우측 상단 바로 누르는 [로그아웃] 버튼 */}
+                  <button
+                    onClick={handleLogout}
+                    className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-bold transition flex items-center gap-1 shadow-sm"
+                    title="로그아웃"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-red-400" />
+                    <span>로그아웃</span>
+                  </button>
+                </>
               ) : (
                 <Link
                   href="/#auth-section"
@@ -121,10 +138,9 @@ export function Navbar() {
                 </Link>
               )}
 
-              {/* 드롭다운 메뉴 */}
-              {/* 드롭다운 메뉴 (가상 계정 전환 목록 제거, 내 계정 정보 및 관리 기능만 유지) */}
+              {/* 드롭다운 메뉴 (내 계정 정보 및 관리자 센터 바로가기) */}
               {switcherOpen && user && (
-                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 z-50 text-xs space-y-3">
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 z-50 text-xs space-y-3">
                   <div className="border-b border-gray-100 pb-3">
                     <p className="text-gray-400 text-[11px]">로그인된 계정 정보</p>
                     <p className="font-bold text-gray-950 text-base mt-0.5">

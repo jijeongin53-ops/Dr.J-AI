@@ -240,7 +240,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-carrot" />
             <h2 className="text-lg font-bold text-gray-950 tracking-tight">
-              {mode === 'register' ? '당근 AI 모임 회원가입 신청' : '당근 AI 모임 로그인'}
+              {mode === 'register' ? "Dr. J's 회원가입 신청" : "Dr. J's 로그인"}
             </h2>
           </div>
           <p className="text-xs text-gray-500 mt-1">

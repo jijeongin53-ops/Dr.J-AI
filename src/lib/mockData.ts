@@ -13,7 +13,7 @@ export const initialUsers: MemberUser[] = [
     role: 'admin',
     status: 'approved',
     joinedAt: '2025-01-01',
-    note: '당근 AI 모임 최고 운영자 및 관리자',
+    note: "Dr. J's 모임 최고 운영자 및 관리자",
   },
 ];
 
@@ -21,7 +21,7 @@ export const initialUsers: MemberUser[] = [
 export const initialLectures: Lecture[] = [
   {
     id: 'lec-1',
-    title: '[1강] 당근 AI 모임 오리엔테이션 및 챗GPT 300% 활용법',
+    title: "[1강] Dr. J's AI 모임 오리엔테이션 및 챗GPT 300% 활용법",
     description: 'AI 툴을 처음 접하는 분들을 위한 프롬프트 핵심 공식 및 직장인을 위한 10분 칼퇴 비법 강의입니다.',
     category: '프롬프트 & 업무활용',
     minViewRole: 'guest', // 준회원도 시청 가능

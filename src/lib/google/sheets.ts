@@ -253,6 +253,29 @@ export async function updateUserRoleAndStatus(
   if (target) {
     target.role = role;
     target.status = status;
+
+    // 구글 스프레드시트의 해당 행 등급/상태 동기화 (GAS 웹훅)
+    const gasUrl = getRuntimeGasUrl();
+    if (gasUrl) {
+      try {
+        await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'updateUserRole',
+            data: {
+              name: target.name,
+              phoneNumber: target.phoneNumber,
+              role,
+              status,
+            },
+          }),
+        });
+      } catch (e) {
+        console.warn('[Google Sheets Sync] 회원 등급 업데이트 전송 실패:', e);
+      }
+    }
+
     return target;
   }
   return null;
@@ -266,11 +289,65 @@ export async function getLectures(): Promise<Lecture[]> {
 }
 
 /**
- * 강의 추가 (관리자용)
+ * 강의 추가 (관리자용) - 구글 시트 '동영상 업로드 현황' 시트에 자동 기록
  */
 export async function addLecture(lecture: Lecture): Promise<Lecture> {
   inMemoryLectures.unshift(lecture);
+
+  // 구글 스프레드시트 '동영상 업로드 현황' 시트에 행 추가
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addLecture',
+          data: {
+            id: lecture.id,
+            title: lecture.title,
+            category: lecture.category,
+            minViewRole: lecture.minViewRole,
+            minDownloadRole: lecture.minDownloadRole,
+            videoUrl: lecture.videoUrl,
+            duration: lecture.duration,
+            createdAt: lecture.createdAt,
+          },
+        }),
+      });
+    } catch (e) {
+      console.warn('[Google Sheets] 강의 시트 추가 실패:', e);
+    }
+  }
+
   return lecture;
+}
+
+/**
+ * 기본 강의 전체를 구글 스프레드시트 '동영상 업로드 현황' 시트에 일괄 동기화
+ */
+export async function syncLecturesToGoogleSheet(): Promise<{ success: boolean; message: string }> {
+  const gasUrl = getRuntimeGasUrl();
+  if (!gasUrl) {
+    return { success: false, message: 'Google Apps Script URL이 설정되지 않았습니다.' };
+  }
+
+  try {
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'syncLectures',
+        lectures: inMemoryLectures,
+      }),
+    });
+    if (res.ok) {
+      return { success: true, message: '구글 시트 [동영상 업로드 현황] 시트에 성공적으로 동기화되었습니다.' };
+    }
+    return { success: false, message: `동기화 실패 (HTTP ${res.status})` };
+  } catch (e: any) {
+    return { success: false, message: e.message || '통신 오류' };
+  }
 }
 
 /**

@@ -27,12 +27,12 @@ export default function HomePage() {
         />
       </section>
 
-      {/* 2. 당근 모임 소개 히어로 배너 (화이트 & 블랙 미니멀 디자인) */}
+      {/* 2. Dr. J's 모임 소개 히어로 배너 (화이트 & 블랙 미니멀 디자인) */}
       <section className="relative rounded-3xl border border-gray-200 bg-gradient-to-b from-gray-50/80 to-white p-8 sm:p-12 overflow-hidden text-center sm:text-left shadow-sm">
         <div className="max-w-2xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-gray-200 bg-white text-xs text-gray-700 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-carrot" />
-            <span>당근 이웃들과 함께하는 AI 실무 교육 플랫폼</span>
+            <span>Dr. J&apos;s AI 실무 교육 &amp; 모임 플랫폼</span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-gray-950 leading-tight">

@@ -45,7 +45,7 @@ export function MemberStatusModal({ isOpen, onClose }: MemberStatusModalProps) {
               <Users className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-gray-900">당근 AI 모임 회원 현황</h3>
+              <h3 className="text-base font-bold text-gray-900">Dr. J&apos;s 회원 현황</h3>
               <p className="text-xs text-gray-500">현재 등록된 회원 및 등급/승인 상태입니다.</p>
             </div>
           </div>

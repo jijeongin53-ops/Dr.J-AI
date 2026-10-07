@@ -6,14 +6,15 @@ import { getCurrentUser } from '@/lib/auth';
 import { initialUsers, initialLectures } from '@/lib/mockData';
 import { MemberManager } from '@/components/admin/MemberManager';
 import { LectureUploader } from '@/components/admin/LectureUploader';
-import { GoogleSheetConnector } from '@/components/admin/GoogleSheetConnector';
 import {
   ShieldAlert,
   Users,
   Video,
-  Key,
   CheckCircle,
   FileSpreadsheet,
+  UploadCloud,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { GOOGLE_SHEET_URL } from '@/lib/constants';
 
@@ -22,25 +23,53 @@ export default function AdminPage() {
   const [users, setUsers] = useState<MemberUser[]>(initialUsers);
   const [lectures, setLectures] = useState<Lecture[]>(initialLectures);
   const [loading, setLoading] = useState(true);
+  const [syncingVideo, setSyncingVideo] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     const user = getCurrentUser();
     if (user) setCurrentUser(user);
 
     Promise.all([
-      fetch('/api/auth').then((r) => r.json()),
-      fetch('/api/lectures').then((r) => r.json()),
+      fetch('/api/auth', { cache: 'no-store' }).then((r) => r.json()),
+      fetch('/api/lectures', { cache: 'no-store' }).then((r) => r.json()),
     ])
       .then(([userData, lectureData]) => {
-        if (userData.users) setUsers(userData.users);
-        if (lectureData.lectures) setLectures(lectureData.lectures);
+        if (userData.users && Array.isArray(userData.users)) setUsers(userData.users);
+        if (lectureData.lectures && Array.isArray(lectureData.lectures)) setLectures(lectureData.lectures);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
+  // 구글 스프레드시트에 '동영상 업로드 현황' 시트 생성 및 동기화 요청
+  const handleSyncVideoSheet = async () => {
+    setSyncingVideo(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch('/api/admin/sync-lectures', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult('동영상 업로드 현황 시트 동기화 완료! 구글 시트에서 탭을 확인하세요.');
+      } else {
+        setSyncResult(data.error || '동기화 처리에 실패했습니다.');
+      }
+    } catch (e: any) {
+      setSyncResult('네트워크 오류가 발생했습니다.');
+    } finally {
+      setSyncingVideo(false);
+      setTimeout(() => setSyncResult(null), 5000);
+    }
+  };
+
   // 비관리자 접근 제한 (모임장 본인 지정인 님 또는 admin 권한 허용)
-  const isAuthorized = currentUser?.role === 'admin' || currentUser?.name === '지정인' || currentUser?.phoneNumber?.includes('82030046');
+  const isAuthorized =
+    currentUser?.role === 'admin' ||
+    currentUser?.name === '지정인' ||
+    currentUser?.phoneNumber?.includes('82030046');
+
   if (!loading && !isAuthorized) {
     return (
       <div className="py-24 text-center max-w-md mx-auto space-y-4">
@@ -60,7 +89,7 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-8 py-4">
-      {/* 관리자 헤더 */}
+      {/* 관리자 헤더 (Dr. J's 로 변경) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
         <div>
           <div className="flex items-center gap-2">
@@ -68,7 +97,7 @@ export default function AdminPage() {
               ADMIN CONTROL
             </span>
             <h1 className="text-2xl font-bold text-gray-950 tracking-tight">
-              당근 모임 통합 관리자 센터
+              Dr. J&apos;s 관리자 센터
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
@@ -76,16 +105,41 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <a
-          href={GOOGLE_SHEET_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-xs text-gray-800 hover:bg-gray-50 font-semibold flex items-center gap-2 transition shadow-sm"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-          <span>구글 시트 바로가기</span>
-        </a>
+        <div className="flex items-center gap-2">
+          {/* 구글 시트 동영상 업로드 현황 탭 생성 & 동기화 버튼 */}
+          <button
+            onClick={handleSyncVideoSheet}
+            disabled={syncingVideo}
+            className="px-4 py-2 rounded-xl border border-carrot/30 bg-orange-50 hover:bg-orange-100 text-carrot text-xs font-bold flex items-center gap-1.5 transition shadow-sm disabled:opacity-50"
+            title="구글 스프레드시트에 '동영상 업로드 현황' 시트를 자동 생성하고 최신 강의를 기록합니다."
+          >
+            {syncingVideo ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <UploadCloud className="w-4 h-4" />
+            )}
+            <span>동영상 현황 시트 동기화</span>
+          </button>
+
+          <a
+            href={GOOGLE_SHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 rounded-xl border border-gray-300 bg-white text-xs text-gray-800 hover:bg-gray-50 font-semibold flex items-center gap-2 transition shadow-sm"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span>구글 시트 바로가기</span>
+          </a>
+        </div>
       </div>
+
+      {/* 동기화 알림 메시지 */}
+      {syncResult && (
+        <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-2 transition">
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{syncResult}</span>
+        </div>
+      )}
 
       {/* 요약 통계 카드 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -117,13 +171,10 @@ export default function AdminPage() {
             <CheckCircle className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-sm font-bold text-emerald-700 flex items-center gap-1 mt-1">
-            <span>구글 시트 연동 지원</span>
+            <span>구글 시트 실시간 연동 활성</span>
           </div>
         </div>
       </div>
-
-      {/* 구글 스프레드시트 1분 자동 연동 설정기 */}
-      <GoogleSheetConnector />
 
       {/* 강의 업로드 컴포넌트 */}
       <LectureUploader
@@ -132,29 +183,6 @@ export default function AdminPage() {
 
       {/* 회원 승인 및 등급 관리 테이블 */}
       <MemberManager initialUsers={users} />
-
-      {/* 구글 시트 자동 저장 셋업 가이드 (Vercel 배포 시) */}
-      <div className="p-6 rounded-2xl border border-gray-200 bg-gray-50 text-xs space-y-3 shadow-sm">
-        <div className="flex items-center gap-2 text-gray-900 font-bold text-sm">
-          <Key className="w-4 h-4 text-carrot" />
-          <span>구글 스프레드시트 자동 저장 연동 안내</span>
-        </div>
-        <p className="text-gray-600 leading-relaxed">
-          회원 가입 데이터가 구글 스프레드시트에 자동으로 들어가려면 Vercel 프로젝트 환경 변수에 아래 두 방법 중 하나가 설정되어 있어야 합니다:
-        </p>
-        <div className="space-y-2">
-          <div className="bg-white p-3.5 rounded-xl border border-gray-200 space-y-1">
-            <span className="font-bold text-gray-800">방법 A: Google Service Account (GCP 서비스 계정)</span>
-            <p className="text-[11px] text-gray-500 font-mono">GOOGLE_SERVICE_ACCOUNT_EMAIL=... / GOOGLE_PRIVATE_KEY=&quot;...&quot;</p>
-            <p className="text-[11px] text-gray-600">구글 시트 우측 상단 [공유]에 서비스 계정 이메일을 <strong>편집자</strong>로 추가해야 쓰기 권한이 부여됩니다.</p>
-          </div>
-          <div className="bg-white p-3.5 rounded-xl border border-gray-200 space-y-1">
-            <span className="font-bold text-gray-800">방법 B: Google Apps Script Web App (가장 간편한 방법)</span>
-            <p className="text-[11px] text-gray-500 font-mono">GOOGLE_APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec</p>
-            <p className="text-[11px] text-gray-600">구글 시트 메뉴 [확장 프로그램] → [Apps Script]에서 웹 앱으로 배포한 URL을 넣으시면 복잡한 인증키 없이 즉시 행이 자동 추가됩니다.</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

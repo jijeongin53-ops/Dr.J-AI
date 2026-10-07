@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MemberUser, MemberRole, MemberStatus } from '@/types';
 import { RoleBadge } from '../common/RoleBadge';
-import { UserCheck } from 'lucide-react';
+import { UserCheck, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface MemberManagerProps {
   initialUsers: MemberUser[];
@@ -12,9 +12,40 @@ interface MemberManagerProps {
 export function MemberManager({ initialUsers }: MemberManagerProps) {
   const [users, setUsers] = useState<MemberUser[]>(initialUsers);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+
+  // 부모 컴포넌트의 initialUsers 변경 시 동기화
+  useEffect(() => {
+    if (initialUsers && initialUsers.length > 0) {
+      setUsers(initialUsers);
+    }
+  }, [initialUsers]);
+
+  // 최신 구글 시트 회원 데이터 불러오기
+  const refreshUsers = async () => {
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/auth', { cache: 'no-store' });
+      const data = await res.json();
+      if (data.users && Array.isArray(data.users)) {
+        setUsers(data.users);
+      }
+    } catch (e) {
+      console.warn('회원 새로고침 실패:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // 컴포넌트 마운트 시 최신 데이터 자동 동기화
+  useEffect(() => {
+    refreshUsers();
+  }, []);
 
   const handleUpdate = async (userId: string, role: MemberRole, status: MemberStatus) => {
     setLoadingId(userId);
+    setFeedbackMsg(null);
     try {
       const res = await fetch('/api/admin/users', {
         method: 'PATCH',
@@ -26,11 +57,25 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
         setUsers((prev) =>
           prev.map((u) => (u.id === userId ? { ...u, role, status } : u))
         );
+        setFeedbackMsg({
+          id: userId,
+          text: '등급 및 승인 상태가 구글 시트에 즉시 반영되었습니다.',
+          ok: true,
+        });
+        setTimeout(() => setFeedbackMsg(null), 3000);
       } else {
-        alert('회원 상태 변경에 실패했습니다.');
+        setFeedbackMsg({
+          id: userId,
+          text: '변경 처리에 실패했습니다.',
+          ok: false,
+        });
       }
     } catch (e) {
-      alert('네트워크 오류가 발생했습니다.');
+      setFeedbackMsg({
+        id: userId,
+        text: '네트워크 통신 오류가 발생했습니다.',
+        ok: false,
+      });
     } finally {
       setLoadingId(null);
     }
@@ -38,107 +83,162 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-gray-900 font-bold text-sm flex items-center gap-2">
-          <UserCheck className="w-4 h-4 text-carrot" />
-          당근 모임 회원 승인 및 등급 관리 ({users.length}명)
-        </h3>
-        <span className="text-xs text-gray-400">
-          * 변경 사항은 구글 스프레드시트에 자동 연동됩니다.
-        </span>
+      {/* 헤더 및 새로고침 버튼 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h3 className="text-gray-900 font-bold text-sm flex items-center gap-2">
+            <UserCheck className="w-4 h-4 text-carrot" />
+            <span>Dr. J&apos;s 회원 승인 및 등급 관리 ({users.length}명)</span>
+          </h3>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            신규 가입 신청자 및 전체 회원의 등급(준회원, 정회원, VIP, 관리자)을 부여하고 승인 상태를 조정합니다.
+          </p>
+        </div>
+
+        <button
+          onClick={refreshUsers}
+          disabled={refreshing}
+          className="px-3 py-1.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm self-start sm:self-auto disabled:opacity-50"
+          title="구글 스프레드시트의 최신 회원 정보 가져오기"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-carrot ${refreshing ? 'animate-spin' : ''}`} />
+          <span>{refreshing ? '동기화 중...' : '최신 회원 새로고침'}</span>
+        </button>
       </div>
 
+      {/* 회원 목록 테이블 */}
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="w-full text-left text-xs text-gray-700">
           <thead className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 uppercase">
             <tr>
-              <th className="py-3 px-4">회원 정보 (아이디/비번)</th>
+              <th className="py-3 px-4">회원 정보 (성명/연락처)</th>
               <th className="py-3 px-4">직업 / 생년월일</th>
               <th className="py-3 px-4">가입일</th>
               <th className="py-3 px-4">현재 등급</th>
-              <th className="py-3 px-4">상태</th>
-              <th className="py-3 px-4 text-right">등급 변경 & 승인</th>
+              <th className="py-3 px-4">승인 상태</th>
+              <th className="py-3 px-4 text-right">등급 변경 및 승인 조정</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {users.map((u) => {
-              const isPending = u.status === 'pending';
-              const isLoading = loadingId === u.id;
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-12 text-center text-gray-400 text-xs">
+                  등록된 회원이 없습니다.
+                </td>
+              </tr>
+            ) : (
+              users.map((u) => {
+                const isPending = u.status === 'pending';
+                const isLoading = loadingId === u.id;
+                const isFeedback = feedbackMsg?.id === u.id;
 
-              return (
-                <tr key={u.id} className="hover:bg-gray-50/70 transition">
-                  <td className="py-3 px-4">
-                    <p className="font-bold text-gray-900">{u.name}</p>
-                    <p className="text-[11px] text-gray-600">{u.phoneNumber} (PW)</p>
-                    <p className="text-[10px] text-gray-400">{u.email}</p>
-                  </td>
-                  <td className="py-3 px-4">
-                    <p className="text-gray-800 font-medium">{u.job || '-'}</p>
-                    <p className="text-[10px] text-gray-400">{u.birthDate || '-'}</p>
-                  </td>
-                  <td className="py-3 px-4 text-gray-400">{u.joinedAt}</td>
-                  <td className="py-3 px-4">
-                    <RoleBadge role={u.role} size="sm" />
-                  </td>
-                  <td className="py-3 px-4">
-                    {u.status === 'approved' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        승인 완료
-                      </span>
-                    )}
-                    {u.status === 'pending' && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-                        승인 대기
-                      </span>
-                    )}
-                    {u.status === 'rejected' && (
-                      <span className="text-[11px] text-red-500">거절됨</span>
-                    )}
-                    {u.status === 'blocked' && (
-                      <span className="text-[11px] text-gray-400">차단됨</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {isPending ? (
-                        <>
-                          <button
-                            onClick={() => handleUpdate(u.id, 'regular', 'approved')}
-                            disabled={isLoading}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold transition shadow-sm"
-                          >
-                            정회원 승인
-                          </button>
-                          <button
-                            onClick={() => handleUpdate(u.id, 'guest', 'rejected')}
-                            disabled={isLoading}
-                            className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-[11px] transition"
-                          >
-                            반려
-                          </button>
-                        </>
-                      ) : (
-                        <select
-                          value={u.role}
-                          disabled={isLoading || u.id === 'user_admin'}
-                          onChange={(e) =>
-                            handleUpdate(u.id, e.target.value as MemberRole, u.status)
-                          }
-                          className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-carrot"
-                        >
-                          <option value="guest">준회원/대기</option>
-                          <option value="regular">정회원</option>
-                          <option value="vip">VIP 회원</option>
-                          <option value="admin">관리자</option>
-                        </select>
+                return (
+                  <tr key={u.id} className="hover:bg-gray-50/70 transition">
+                    <td className="py-3 px-4">
+                      <p className="font-bold text-gray-900 flex items-center gap-1.5">
+                        <span>{u.name}</span>
+                        {u.name === '지정인' && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-black text-white font-bold">
+                            모임장
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-gray-600">{u.phoneNumber} (PW)</p>
+                      <p className="text-[10px] text-gray-400">{u.email}</p>
+                      {isFeedback && (
+                        <p className={`text-[10px] mt-1 font-semibold ${feedbackMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {feedbackMsg.text}
+                        </p>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                    </td>
+                    <td className="py-3 px-4">
+                      <p className="text-gray-800 font-medium">{u.job || '-'}</p>
+                      <p className="text-[10px] text-gray-400">{u.birthDate || '-'}</p>
+                    </td>
+                    <td className="py-3 px-4 text-gray-500">{u.joinedAt || '-'}</td>
+                    <td className="py-3 px-4">
+                      <RoleBadge role={u.role} size="sm" />
+                    </td>
+                    <td className="py-3 px-4">
+                      {u.status === 'approved' && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          승인 완료
+                        </span>
+                      )}
+                      {u.status === 'pending' && (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 font-bold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                          승인 대기
+                        </span>
+                      )}
+                      {u.status === 'rejected' && (
+                        <span className="text-[11px] text-red-500 font-semibold">거절됨</span>
+                      )}
+                      {u.status === 'blocked' && (
+                        <span className="text-[11px] text-gray-400">차단됨</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {/* 빠른 원클릭 승인 (대기 회원인 경우) */}
+                        {isPending && (
+                          <div className="flex items-center gap-1 mr-1">
+                            <button
+                              onClick={() => handleUpdate(u.id, 'regular', 'approved')}
+                              disabled={isLoading}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition shadow-sm disabled:opacity-50"
+                            >
+                              정회원 즉시 승인
+                            </button>
+                            <button
+                              onClick={() => handleUpdate(u.id, 'guest', 'rejected')}
+                              disabled={isLoading}
+                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-[11px] transition disabled:opacity-50"
+                            >
+                              반려
+                            </button>
+                          </div>
+                        )}
+
+                        {/* 등급 직접 변경 드롭다운 */}
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={u.role}
+                            disabled={isLoading}
+                            onChange={(e) =>
+                              handleUpdate(u.id, e.target.value as MemberRole, u.status)
+                            }
+                            className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-2 py-1 font-medium focus:outline-none focus:border-black disabled:opacity-50"
+                            title="회원 등급 변경"
+                          >
+                            <option value="guest">준회원/대기</option>
+                            <option value="regular">정회원</option>
+                            <option value="vip">VIP 회원</option>
+                            <option value="admin">관리자</option>
+                          </select>
+
+                          {/* 승인 상태 직접 변경 드롭다운 */}
+                          <select
+                            value={u.status}
+                            disabled={isLoading}
+                            onChange={(e) =>
+                              handleUpdate(u.id, u.role, e.target.value as MemberStatus)
+                            }
+                            className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-2 py-1 font-medium focus:outline-none focus:border-black disabled:opacity-50"
+                            title="승인 상태 변경"
+                          >
+                            <option value="approved">승인 완료</option>
+                            <option value="pending">승인 대기</option>
+                            <option value="rejected">반려/거절</option>
+                          </select>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

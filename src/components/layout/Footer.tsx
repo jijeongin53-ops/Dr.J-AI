@@ -6,11 +6,11 @@ export function Footer() {
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
         <div className="flex items-center gap-2 font-medium text-gray-700">
           <span className="w-2 h-2 rounded-full bg-carrot" />
-          <span>당근 AI 모임 전용 플랫폼</span>
+          <span>Dr. J&apos;s 모임 플랫폼</span>
         </div>
 
         <div className="text-gray-400">
-          © {new Date().getFullYear()} 당근 AI 모임. All rights reserved.
+          © {new Date().getFullYear()} Dr. J&apos;s. All rights reserved.
         </div>
       </div>
     </footer>

@@ -19,10 +19,12 @@ export function getCurrentUser(): MemberUser | null {
 export function setCurrentUser(user: MemberUser): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  window.dispatchEvent(new Event('authChange'));
 }
 
 // 로그아웃
 export function clearCurrentUser(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  window.dispatchEvent(new Event('authChange'));
 }
