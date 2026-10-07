@@ -17,6 +17,7 @@ import { GOOGLE_SHEET_URL } from '@/lib/constants';
 // 구글 시트에 붙여넣을 완성형 Google Apps Script 코드
 export const GAS_SCRIPT_CODE = `// ==========================================
 // [당근 모임] 구글 스프레드시트 자동 연동 스크립트
+// (회원 가입 동기화 + Dr. J 질문 시트 저장 및 jguy12@hanmail.net 자동 메일 발송 지원)
 // ==========================================
 
 function doPost(e) {
@@ -24,7 +25,98 @@ function doPost(e) {
   lock.tryLock(10000);
 
   try {
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. 전달된 데이터 추출
+    var requestData = {};
+    if (e.postData && e.postData.contents) {
+      try {
+        requestData = JSON.parse(e.postData.contents);
+      } catch (err) {
+        requestData = e.parameter || {};
+      }
+    } else {
+      requestData = e.parameter || {};
+    }
+
+    var action = requestData.action || "addUser";
+    var data = requestData.data || requestData;
+
+    // [ACTION 1]: Dr. J에게 물어봐 (시트 자동 기록 + jguy12@hanmail.net 즉시 메일 발송)
+    if (action === "askDrJ") {
+      var questionSheet = ss.getSheetByName("DrJ_질문함");
+      if (!questionSheet) {
+        questionSheet = ss.insertSheet("DrJ_질문함");
+        var qHeaders = ["접수일시", "성명", "연락처", "답변이메일", "질문제목", "질문내용"];
+        questionSheet.appendRow(qHeaders);
+        var qHeaderRange = questionSheet.getRange(1, 1, 1, qHeaders.length);
+        qHeaderRange.setBackground("#EA580C");
+        qHeaderRange.setFontColor("#FFFFFF");
+        qHeaderRange.setFontWeight("bold");
+        qHeaderRange.setHorizontalAlignment("center");
+        questionSheet.setFrozenRows(1);
+      }
+
+      var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+      var qRow = [
+        data.createdAt || nowStr,
+        data.userName || data.name || "",
+        data.phoneNumber || "",
+        data.email || "",
+        data.title || "",
+        data.content || ""
+      ];
+      questionSheet.appendRow(qRow);
+
+      // 모임장 이메일(jguy12@hanmail.net)로 구글 메일 서비스 즉시 발송
+      try {
+        var emailSubject = "[Dr. J에게 물어봐] " + (data.userName || "회원") + "님의 새로운 질문: " + (data.title || "");
+        var emailHtml = '<div style="font-family: sans-serif; max-width: 600px; padding: 20px; border: 1px solid #fed7aa; border-radius: 12px; background: #fff;">'
+          + '<h2 style="color: #ea580c; margin-top:0;">Dr. J에게 새로운 질문이 도착했습니다!</h2>'
+          + '<p><strong>질문자 성명:</strong> ' + (data.userName || "") + '</p>'
+          + '<p><strong>연락처:</strong> ' + (data.phoneNumber || "") + '</p>'
+          + '<p><strong>답변 회신 이메일:</strong> <a href="mailto:' + (data.email || "") + '">' + (data.email || "") + '</a></p>'
+          + '<hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;">'
+          + '<h3 style="color: #111;">제목: ' + (data.title || "") + '</h3>'
+          + '<div style="background: #f9fafb; padding: 15px; border-radius: 8px; white-space: pre-wrap; line-height: 1.6;">' + (data.content || "") + '</div>'
+          + '<p style="color: #888; font-size: 12px; margin-top: 20px;">* 회원의 이메일로 바로 회신하시려면 <a href="mailto:' + (data.email || "") + '">여기</a>를 클릭하세요.</p>'
+          + '</div>';
+
+        MailApp.sendEmail({
+          to: "jguy12@hanmail.net",
+          subject: emailSubject,
+          htmlBody: emailHtml,
+          name: "Dr. J 질문 알림"
+        });
+      } catch (mailErr) {
+        // 메일 발송 로그 기록
+        Logger.log("Mail send error: " + mailErr);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "askDrJ", row: qRow }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 2]: 범용 이메일 발송 (회원 승인/반려 안내 등)
+    if (action === "sendEmail") {
+      try {
+        MailApp.sendEmail({
+          to: data.to,
+          subject: data.subject,
+          htmlBody: data.html,
+          body: data.body || "",
+          name: "Dr. J's AI 커뮤니티"
+        });
+        return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "sendEmail", to: data.to }))
+          .setMimeType(ContentService.MimeType.JSON);
+      } catch (err) {
+        return ContentService.createTextOutput(JSON.stringify({ result: "error", message: err.toString() }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // [ACTION 3]: 기본 회원 가입 / 회원 정보 등록
+    var sheet = ss.getActiveSheet();
 
     // 1. 헤더가 없는 경우 첫 번째 행에 자동 생성
     if (sheet.getLastRow() === 0) {
@@ -47,20 +139,6 @@ function doPost(e) {
       headerRange.setHorizontalAlignment("center");
       sheet.setFrozenRows(1);
     }
-
-    // 2. 전달된 데이터 추출
-    var requestData = {};
-    if (e.postData && e.postData.contents) {
-      try {
-        requestData = JSON.parse(e.postData.contents);
-      } catch (err) {
-        requestData = e.parameter || {};
-      }
-    } else {
-      requestData = e.parameter || {};
-    }
-
-    var data = requestData.data || requestData;
 
     // 3. 스프레드시트에 새 행 추가
     var newRow = [

@@ -14,6 +14,7 @@ import {
   LogOut,
   CalendarCheck2,
   MessageCircleQuestion,
+  Sparkles,
 } from 'lucide-react';
 
 export function Navbar() {
@@ -49,7 +50,7 @@ export function Navbar() {
       <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/95 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* 로고 영역 (Dr. J's 로 변경) */}
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-3 sm:gap-6">
             <Link href="/" className="flex items-center gap-2 group">
               <span className="w-2.5 h-2.5 rounded-full bg-carrot" />
               <span className="font-bold text-lg tracking-tight text-gray-950 group-hover:text-carrot transition-colors">
@@ -57,6 +58,17 @@ export function Navbar() {
               </span>
               <span className="text-xs text-gray-400 font-mono hidden sm:inline">Hub</span>
             </Link>
+
+            {/* Dr. J 넷플릭스 인트로 효과음 다시보기 버튼 */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event('replayNetflixIntro'))}
+              className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-carrot px-2 py-0.5 rounded-full hover:bg-orange-50 transition border border-gray-200/60 hover:border-orange-200"
+              title="Dr. J 넷플릭스 인트로 효과음 다시 보기"
+            >
+              <Sparkles className="w-3 h-3 text-carrot" />
+              <span className="hidden sm:inline">Intro</span>
+            </button>
 
             {/* 메인 내비게이션 메뉴 */}
             <nav className="hidden md:flex items-center gap-1">

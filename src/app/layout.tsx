@@ -4,6 +4,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { AttendancePushAlert } from '@/components/attendance/AttendancePushAlert';
 import { AskDrJModal } from '@/components/common/AskDrJModal';
+import { NetflixIntro } from '@/components/common/NetflixIntro';
 
 export const metadata: Metadata = {
   title: "Dr. J's 교육 & 모임 플랫폼",
@@ -18,6 +19,8 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="min-h-screen flex flex-col bg-white text-gray-900 antialiased selection:bg-carrot selection:text-white">
+        {/* 접속 시 넷플릭스 효과음과 함께 Dr. J 로고가 극적으로 등장하는 시네마틱 인트로 */}
+        <NetflixIntro />
         <Navbar />
         {/* 실시간 강의 출석 체크 푸시 알림 배너 */}
         <AttendancePushAlert />
