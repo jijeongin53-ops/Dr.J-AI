@@ -4,8 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MemberUser } from '@/types';
-import { getCurrentUser, setCurrentUser, clearCurrentUser } from '@/lib/auth';
-import { initialUsers } from '@/lib/mockData';
+import { getCurrentUser, clearCurrentUser } from '@/lib/auth';
 import { RoleBadge } from '../common/RoleBadge';
 import { MemberStatusModal } from '../common/MemberStatusModal';
 import {
@@ -14,6 +13,7 @@ import {
   ChevronDown,
   LogOut,
   User,
+  Settings,
 } from 'lucide-react';
 
 export function Navbar() {
@@ -29,13 +29,6 @@ export function Navbar() {
       setUser(current);
     }
   }, []);
-
-  const handleSwitchUser = (selectedUser: MemberUser) => {
-    setCurrentUser(selectedUser);
-    setUser(selectedUser);
-    setSwitcherOpen(false);
-    window.location.reload();
-  };
 
   const handleLogout = () => {
     clearCurrentUser();
@@ -129,39 +122,41 @@ export function Navbar() {
               )}
 
               {/* 드롭다운 메뉴 */}
+              {/* 드롭다운 메뉴 (가상 계정 전환 목록 제거, 내 계정 정보 및 관리 기능만 유지) */}
               {switcherOpen && user && (
-                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-2 z-50 text-xs">
-                  <div className="px-3 py-2 border-b border-gray-100 mb-2">
-                    <p className="text-gray-400 text-[11px]">로그인된 계정:</p>
-                    <p className="font-bold text-gray-900 text-sm">
-                      {user.name} <span className="text-gray-500 font-normal">({user.phoneNumber})</span>
+                <div className="absolute right-0 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl p-3 z-50 text-xs space-y-3">
+                  <div className="border-b border-gray-100 pb-3">
+                    <p className="text-gray-400 text-[11px]">로그인된 계정 정보</p>
+                    <p className="font-bold text-gray-950 text-base mt-0.5">
+                      {user.name}
                     </p>
-                    <p className="text-gray-500 text-[11px]">{user.job || '회원'} | {user.email}</p>
+                    <div className="mt-1 space-y-0.5 text-gray-600 text-[11px]">
+                      <p>연락처(PW): {user.phoneNumber}</p>
+                      <p>직업: {user.job || '일반'}</p>
+                      <p>이메일: {user.email}</p>
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <span className="text-[11px] text-gray-400">회원 등급:</span>
+                      <RoleBadge role={user.role} size="sm" />
+                    </div>
                   </div>
 
-                  <div className="px-3 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                    테스트 계정 전환
-                  </div>
-
-                  {initialUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => handleSwitchUser(u)}
-                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between hover:bg-gray-50 transition ${
-                        user.id === u.id ? 'bg-orange-50/70 font-bold text-carrot' : 'text-gray-700'
-                      }`}
+                  {/* 관리자 센터 링크 (모임장 본인 또는 관리자) */}
+                  {(user.role === 'admin' || user.name === '지정인') && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setSwitcherOpen(false)}
+                      className="w-full px-3 py-2 rounded-lg bg-orange-50 hover:bg-orange-100 text-carrot font-bold flex items-center gap-2 transition"
                     >
-                      <span>
-                        {u.name} <span className="text-gray-400 text-[11px]">({u.role})</span>
-                      </span>
-                      <RoleBadge role={u.role} size="sm" />
-                    </button>
-                  ))}
+                      <ShieldAlert className="w-4 h-4" />
+                      <span>모임장 관리자 센터 열기</span>
+                    </Link>
+                  )}
 
-                  <div className="border-t border-gray-100 mt-2 pt-2">
+                  <div className="border-t border-gray-100 pt-2">
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-1.5 transition font-medium"
+                      className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-1.5 transition font-semibold"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       로그아웃

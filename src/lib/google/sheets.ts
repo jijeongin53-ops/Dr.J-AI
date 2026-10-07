@@ -86,9 +86,51 @@ export async function getSheetData<T>(sheetName: string, fallbackData: T[]): Pro
 }
 
 /**
- * 사용자 목록 조회
+ * 사용자 목록 조회 (구글 스프레드시트 실시간 동기화 및 가상 회원 제외)
  */
 export async function getUsers(): Promise<MemberUser[]> {
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      const res = await fetch(gasUrl, { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        const rows: any[][] = json.rows || [];
+        // 첫 번째 행은 헤더이므로 rows.slice(1) 사용
+        if (rows.length > 1) {
+          const sheetUsers: MemberUser[] = rows
+            .slice(1)
+            .map((r, idx) => {
+              const name = String(r[0] || '').trim();
+              const phone = String(r[1] || '').trim();
+              const isJjyAdmin = name === '지정인' || phone.includes('82030046');
+              return {
+                id: `sheet_user_${idx + 1}`,
+                name: name,
+                phoneNumber: phone,
+                birthDate: String(r[2] || '').trim(),
+                job: String(r[3] || '').trim(),
+                email: String(r[4] || '').trim(),
+                carrotNickname: name,
+                role: isJjyAdmin ? 'admin' : ((r[5] as any) || 'guest'),
+                status: isJjyAdmin ? 'approved' : ((r[6] as any) || 'pending'),
+                joinedAt: String(r[7] || '').split(' ')[0] || new Date().toISOString().split('T')[0],
+                note: String(r[8] || '').trim(),
+              };
+            })
+            .filter((u) => u.name); // 이름이 있는 실제 회원만 추출
+
+          if (sheetUsers.length > 0) {
+            inMemoryUsers = sheetUsers;
+            return sheetUsers;
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Google Sheets Sync] 시트 데이터 조회 실패, 로컬 메모리 사용:', e.message);
+    }
+  }
+
   return inMemoryUsers;
 }
 
