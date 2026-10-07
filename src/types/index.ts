@@ -86,3 +86,25 @@ export const ROLE_LABELS: Record<MemberRole, { name: string; badgeClass: string 
   regular: { name: '정회원', badgeClass: 'bg-gray-100 text-gray-800 border border-gray-300 font-medium' },
   guest: { name: '대기/준회원', badgeClass: 'bg-gray-50 text-gray-500 border border-gray-200' },
 };
+
+// 강의 출석부 세션 인터페이스
+export interface AttendanceSession {
+  id: string;
+  title: string; // 예: "4월 1회차 실시간 AI 강의 출석 체크"
+  startedAt: string;
+  isActive: boolean;
+  code?: string; // 출석 확인 번호(선택)
+}
+
+// 개별 회원 출석 기록 인터페이스
+export interface AttendanceRecord {
+  id: string;
+  sessionId: string;
+  userId: string;
+  userName: string;
+  phoneNumber: string;
+  role: MemberRole;
+  status: 'present' | 'absent' | 'late'; // 출석, 결석, 지각
+  checkedAt: string;
+  isSelfChecked: boolean; // 회원이 직접 푸시를 눌러 체크했는지 여부
+}

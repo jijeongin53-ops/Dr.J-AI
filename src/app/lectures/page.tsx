@@ -89,8 +89,10 @@ export default function LecturesPage() {
 
       {/* 강의 카드 그리드 */}
       {filteredLectures.length === 0 ? (
-        <div className="py-24 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
-          조건에 일치하는 강의가 없습니다.
+        <div className="py-24 text-center text-xs text-gray-500 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50 space-y-2">
+          <BookOpen className="w-8 h-8 text-gray-300 mx-auto" />
+          <p className="font-semibold text-gray-700">등록된 강의 영상 및 교육 자료가 없습니다.</p>
+          <p className="text-[11px] text-gray-400">모임장(관리자)이 상단의 [새 강의 등록]을 통해 강의를 등록하면 이곳에 표시됩니다.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

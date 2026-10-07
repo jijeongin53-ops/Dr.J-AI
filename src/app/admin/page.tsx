@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { initialUsers, initialLectures } from '@/lib/mockData';
 import { MemberManager } from '@/components/admin/MemberManager';
 import { LectureUploader } from '@/components/admin/LectureUploader';
+import { AttendanceSheet } from '@/components/attendance/AttendanceSheet';
 import {
   ShieldAlert,
   Users,
@@ -180,6 +181,9 @@ export default function AdminPage() {
       <LectureUploader
         onSuccess={(newLec) => setLectures((prev) => [newLec, ...prev])}
       />
+
+      {/* 실시간 강의 출석부 컴포넌트 */}
+      <AttendanceSheet currentUser={currentUser} />
 
       {/* 회원 승인 및 등급 관리 테이블 */}
       <MemberManager initialUsers={users} />

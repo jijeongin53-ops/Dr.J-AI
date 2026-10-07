@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+import { AttendancePushAlert } from '@/components/attendance/AttendancePushAlert';
 
 export const metadata: Metadata = {
   title: "Dr. J's 교육 & 모임 플랫폼",
@@ -17,6 +18,8 @@ export default function RootLayout({
     <html lang="ko">
       <body className="min-h-screen flex flex-col bg-white text-gray-900 antialiased selection:bg-carrot selection:text-white">
         <Navbar />
+        {/* 실시간 강의 출석 체크 푸시 알림 배너 */}
+        <AttendancePushAlert />
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {children}
         </main>

@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   ChevronDown,
   LogOut,
+  CalendarCheck2,
 } from 'lucide-react';
 
 export function Navbar() {
@@ -78,6 +79,18 @@ export function Navbar() {
                 }`}
               >
                 승인 채팅방
+              </Link>
+
+              <Link
+                href="/attendance"
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  pathname === '/attendance'
+                    ? 'bg-gray-100 text-gray-900 font-semibold'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <CalendarCheck2 className="w-4 h-4 text-carrot" />
+                <span>강의 출석부</span>
               </Link>
 
               <Link
