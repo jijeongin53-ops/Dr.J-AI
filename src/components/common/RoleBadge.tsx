@@ -12,7 +12,7 @@ export function RoleBadge({ role, size = 'sm' }: RoleBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center font-medium rounded-full ${sizeClasses} ${meta.badgeClass}`}
+      className={`inline-flex items-center font-medium rounded-full whitespace-nowrap shrink-0 ${sizeClasses} ${meta.badgeClass}`}
     >
       {meta.name}
     </span>

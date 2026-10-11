@@ -95,56 +95,63 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
           return (
             <div
               key={mat.id}
-              className="p-4 flex items-center justify-between gap-4 hover:bg-gray-50/80 transition"
+              className="p-4 flex flex-col gap-3 hover:bg-gray-50/80 transition"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center shrink-0 text-gray-700">
+              {/* 파일 메타 정보 */}
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 text-carrot">
                   <FileText className="w-4 h-4" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{mat.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
-                    {mat.fileSize && <span>{mat.fileSize}</span>}
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      다운로드 권한: <RoleBadge role={mat.minDownloadRole} size="sm" />
-                    </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-gray-900 leading-snug break-all line-clamp-2" title={mat.name}>
+                    {mat.name}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-gray-500">
+                    {mat.fileSize && (
+                      <span className="text-gray-400">{mat.fileSize}</span>
+                    )}
+                    {mat.fileSize && <span className="text-gray-300">•</span>}
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="text-gray-400">권한:</span>
+                      <RoleBadge role={mat.minDownloadRole} size="sm" />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
+              {/* 액션 버튼 그룹 */}
+              <div className="flex items-center gap-2 pt-0.5">
                 {canDownload && (
                   <a
                     href={getDriveViewerUrl(mat.driveFileId || mat.fileUrl)}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-1 transition shadow-sm"
+                    className="flex-1 py-2 px-3 rounded-xl text-xs font-semibold border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center justify-center gap-1.5 transition shadow-xs"
                     title="웹 브라우저에서 바로 열기"
                   >
-                    <ExternalLink className="w-3.5 h-3.5 text-carrot" />
-                    <span className="hidden sm:inline">바로보기</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-carrot shrink-0" />
+                    <span className="whitespace-nowrap">바로보기</span>
                   </a>
                 )}
                 <button
                   onClick={() => handleDownload(mat)}
                   disabled={downloadingId === mat.id}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs ${
                     canDownload
-                      ? 'bg-gray-900 hover:bg-black text-white shadow-sm'
-                      : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+                      ? 'flex-1 bg-gray-900 hover:bg-black text-white'
+                      : 'w-full bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                   title={canDownload ? '자료 다운로드' : '다운로드 권한 필요'}
                 >
                   {canDownload ? (
                     <>
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{downloadingId === mat.id ? '준비 중...' : '다운로드'}</span>
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">{downloadingId === mat.id ? '준비 중...' : '다운로드'}</span>
                     </>
                   ) : (
                     <>
-                      <Lock className="w-3.5 h-3.5 text-gray-400" />
-                      <span>다운로드 잠김</span>
+                      <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="whitespace-nowrap">다운로드 잠김</span>
                     </>
                   )}
                 </button>
