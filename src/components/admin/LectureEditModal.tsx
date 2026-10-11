@@ -27,6 +27,7 @@ export function LectureEditModal({
   const [category, setCategory] = useState<string>(lecture.category || LECTURE_CATEGORIES[1]);
   const [videoUrl, setVideoUrl] = useState(lecture.videoUrl || '');
   const [duration, setDuration] = useState(lecture.duration || '45분');
+  const [startTime, setStartTime] = useState(lecture.startTime || '');
   const [minViewRole, setMinViewRole] = useState<MemberRole>(lecture.minViewRole || 'guest');
   const [minDownloadRole, setMinDownloadRole] = useState<MemberRole>(
     lecture.minDownloadRole || 'guest'
@@ -71,6 +72,7 @@ export function LectureEditModal({
       description: description.trim(),
       category,
       videoUrl: videoUrl.trim(),
+      startTime: startTime.trim(),
       duration: duration.trim(),
       minViewRole,
       minDownloadRole,
@@ -169,7 +171,33 @@ export function LectureEditModal({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                강의 시작 시간 (라이브/세미나)
+              </label>
+              <input
+                type="text"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                placeholder="예: 19:30 or 2026-10-12 19:30"
+                className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 focus:outline-none focus:border-carrot font-medium"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                강의 시간 (소요시간)
+              </label>
+              <input
+                type="text"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="예: 45분"
+                className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 focus:outline-none focus:border-carrot font-medium"
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
                 동영상 링크 or 파일 ID

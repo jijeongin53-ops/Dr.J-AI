@@ -46,6 +46,7 @@ export interface Lecture {
   thumbnailUrl?: string;
   isPublished: boolean;
   maxAttendees?: number; // 입장 가능한 최대 회원 수 (0 또는 미설정 시 무제한)
+  startTime?: string; // 강의 시작 시간 (예: "19:30" 또는 "2026-10-12 19:30")
 }
 
 // 댓글 인터페이스
@@ -121,6 +122,7 @@ export interface AttendanceSession {
   startedAt: string;
   isActive: boolean;
   code?: string; // 출석 확인 번호(선택)
+  lectureId?: string; // 대상 강의 ID
 }
 
 // 개별 회원 출석 기록 인터페이스

@@ -4,6 +4,10 @@ import {
   leaveLectureRoom,
   getMemberRoomStatus,
   setRoomMaxAttendees,
+  setRoomStartTime,
+  startRoomAttendance,
+  stopRoomAttendance,
+  checkInRoomAttendance,
 } from '@/lib/lectureRoom';
 import { MemberUser } from '@/types';
 
@@ -17,8 +21,9 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || undefined;
     const userPhone = searchParams.get('userPhone') || undefined;
+    const isAdmin = searchParams.get('isAdmin') === 'true';
 
-    const status = getMemberRoomStatus(lectureId, userId, userPhone);
+    const status = getMemberRoomStatus(lectureId, userId, userPhone, isAdmin);
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(
@@ -36,7 +41,7 @@ export async function POST(
   try {
     const lectureId = params.id;
     const body = await request.json();
-    const { action, user, userId, maxAttendees } = body;
+    const { action, user, userId, maxAttendees, startTime, title, code } = body;
 
     // 1. 강의실 입장
     if (action === 'enter') {
@@ -100,6 +105,54 @@ export async function POST(
         },
         message: `강의실 정원이 ${maxAttendees === 0 ? '무제한' : maxAttendees + '명'}으로 변경되었습니다.`,
       });
+    }
+
+    // 4. 관리자: 강의 시작 시간 설정
+    if (action === 'updateStartTime') {
+      if (typeof startTime !== 'string') {
+        return NextResponse.json({ error: '시작 시간 형식이 올바르지 않습니다.' }, { status: 400 });
+      }
+      const room = setRoomStartTime(lectureId, startTime.trim());
+      return NextResponse.json({
+        success: true,
+        startTime: room.startTime,
+        message: `강의 시작 시간이 '${startTime}'(으)로 설정되었습니다.`,
+      });
+    }
+
+    // 5. 관리자: 4자리 랜덤 숫자 출석 체크 시작
+    if (action === 'startAttendance') {
+      const result = startRoomAttendance(lectureId, title, code);
+      return NextResponse.json({
+        success: true,
+        code: result.code,
+        session: result.session,
+        message: '4자리 실시간 출석 체크가 시작되었습니다.',
+      });
+    }
+
+    // 6. 관리자: 실시간 출석 체크 마감/종료
+    if (action === 'stopAttendance') {
+      const stopped = stopRoomAttendance(lectureId);
+      return NextResponse.json({
+        success: stopped,
+        message: '출석 체크가 종료되었습니다.',
+      });
+    }
+
+    // 7. 참석자: 4자리 숫자 입력 출석 체크
+    if (action === 'checkInAttendance') {
+      if (!user) {
+        return NextResponse.json({ error: '로그인 회원 정보가 필요합니다.' }, { status: 400 });
+      }
+      if (!code || typeof code !== 'string') {
+        return NextResponse.json({ error: '4자리 출석 번호를 입력해주세요.' }, { status: 400 });
+      }
+      const result = checkInRoomAttendance(lectureId, user as MemberUser, code);
+      if (!result.success) {
+        return NextResponse.json({ error: result.message }, { status: 400 });
+      }
+      return NextResponse.json(result);
     }
 
     return NextResponse.json({ error: '유효하지 않은 요청 액션입니다.' }, { status: 400 });

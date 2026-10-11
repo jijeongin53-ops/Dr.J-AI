@@ -148,6 +148,7 @@ export default function LectureDetailPage() {
           lectureId={lecture.id}
           maxAttendees={lecture.maxAttendees ?? 30}
           currentUser={currentUser}
+          initialStartTime={lecture.startTime}
         />
       </section>
 
@@ -189,6 +190,12 @@ export default function LectureDetailPage() {
             <Calendar className="w-3.5 h-3.5" />
             등록일: {lecture.createdAt}
           </span>
+          {lecture.startTime && (
+            <span className="flex items-center gap-1.5 font-semibold text-carrot">
+              <Clock className="w-3.5 h-3.5" />
+              시작 시간: {lecture.startTime}
+            </span>
+          )}
           {lecture.duration && (
             <span className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
