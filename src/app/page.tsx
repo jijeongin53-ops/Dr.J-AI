@@ -13,8 +13,18 @@ export default function HomePage() {
   const [currentUser, setCurrentUser] = useState<MemberUser | null>(null);
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) setCurrentUser(user);
+    const syncUser = () => {
+      const user = getCurrentUser();
+      setCurrentUser(user);
+    };
+    syncUser();
+
+    window.addEventListener('storage', syncUser);
+    window.addEventListener('authChange', syncUser);
+    return () => {
+      window.removeEventListener('storage', syncUser);
+      window.removeEventListener('authChange', syncUser);
+    };
   }, []);
 
   return (

@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MemberUser } from '@/types';
 import { setCurrentUser, clearCurrentUser } from '@/lib/auth';
 import { RoleBadge } from '../common/RoleBadge';
+import { validateKoreanName, formatPhoneNumber, formatBirthDate, getLast4PhoneDigits } from '@/lib/formatters';
 import {
   UserPlus,
   LogIn,
@@ -48,6 +49,49 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // [요구사항 5]: 관리자 센터에서 승인 완료 시 회원에게 실시간 즉시 반영
+  useEffect(() => {
+    if (!currentUser || currentUser.status === 'approved') return;
+
+    const checkApprovalStatus = async () => {
+      try {
+        const phoneParam = currentUser.phoneNumber ? `&phoneNumber=${encodeURIComponent(currentUser.phoneNumber)}` : '';
+        const res = await fetch(
+          `/api/auth?userId=${encodeURIComponent(currentUser.id)}&name=${encodeURIComponent(currentUser.name)}${phoneParam}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.user && (data.user.status !== currentUser.status || data.user.role !== currentUser.role)) {
+          setCurrentUser(data.user);
+          if (onAuthSuccess) onAuthSuccess(data.user);
+          if (data.user.status === 'approved') {
+            setSuccessMsg('🎉 관리자(모임장) 승인이 완료되었습니다! 정회원 권한이 즉시 활성화되었습니다.');
+          }
+        }
+      } catch (_) {}
+    };
+
+    // 3초 주기로 승인 상태 실시간 감지
+    const timer = setInterval(checkApprovalStatus, 3000);
+    checkApprovalStatus();
+
+    // 탭 간 실시간 통신 (동일 브라우저 즉시 반영)
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel('daangn_auth_sync');
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'USER_UPDATED') {
+          checkApprovalStatus();
+        }
+      };
+    } catch (_) {}
+
+    return () => {
+      clearInterval(timer);
+      if (channel) channel.close();
+    };
+  }, [currentUser, onAuthSuccess]);
+
   // 회원가입 또는 반려 정보 수정 제출
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,10 +103,22 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
       return;
     }
 
+    // [요구사항 1]: 성명 한글 2~4자 검증 (영문, 숫자 불가)
+    const nameValidation = validateKoreanName(name);
+    if (!nameValidation.valid) {
+      setErrorMsg(nameValidation.message || '성명은 한글 2~4자 이내로만 입력 가능합니다. (영문, 숫자 불가)');
+      return;
+    }
+
     if (!agreeTerms) {
       setErrorMsg('개인정보 수집 및 활용에 동의해 주셔야 가입이 가능합니다.');
       return;
     }
+
+    // [요구사항 2 & 3]: 연락처(010-0000-0000) 및 생년월일(0000-00-00) 서식 정규화
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    const formattedBirth = formatBirthDate(birthDate);
+    const last4Password = getLast4PhoneDigits(formattedPhone);
 
     setLoading(true);
     try {
@@ -74,9 +130,9 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
           body: JSON.stringify({
             userId: editingUser.id,
             name: name.trim(),
-            birthDate: birthDate.trim(),
+            birthDate: formattedBirth,
             job: job.trim(),
-            phoneNumber: phoneNumber.trim(),
+            phoneNumber: formattedPhone,
             email: email.trim(),
           }),
         });
@@ -105,9 +161,9 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          birthDate: birthDate.trim(),
+          birthDate: formattedBirth,
           job: job.trim(),
-          phoneNumber: phoneNumber.trim(),
+          phoneNumber: formattedPhone,
           email: email.trim(),
         }),
       });
@@ -136,8 +192,8 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 data: {
                   id: data.user?.id || `user_${Date.now()}`,
                   name: name.trim(),
-                  phoneNumber: phoneNumber.trim(),
-                  birthDate: birthDate.trim(),
+                  phoneNumber: formattedPhone,
+                  birthDate: formattedBirth,
                   job: job.trim(),
                   email: email.trim(),
                   role: 'guest',
@@ -151,7 +207,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
         } catch (_) {}
 
         setSuccessMsg(
-          '🎉 회원가입 신청이 완료되었습니다! (아이디: 성명 / 비밀번호: 연락처)\n모임장 승인 대기 상태로 등록되었습니다.'
+          `🎉 회원가입 신청이 완료되었습니다!\n(아이디: ${data.user?.name} / 비밀번호: 연락처 뒤 4자리 [${last4Password}])\n모임장 승인 대기 상태로 등록되었습니다.`
         );
         setCurrentUser(data.user);
         if (onAuthSuccess) {
@@ -167,7 +223,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     }
   };
 
-  // 로그인 제출 (성명=아이디, 연락처=비밀번호)
+  // 로그인 제출 (성명=아이디, 연락처 뒤 4자리=비밀번호)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -175,7 +231,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     setRejectionNotice(null);
 
     if (!loginName.trim() || !loginPhone.trim()) {
-      setErrorMsg('성명(아이디)과 연락처(비밀번호)를 모두 입력하세요.');
+      setErrorMsg('성명(아이디)과 비밀번호(연락처 뒤 4자리)를 모두 입력하세요.');
       return;
     }
 
@@ -189,7 +245,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMsg(data.error || '성명 또는 연락처가 일치하지 않습니다.');
+        setErrorMsg(data.error || '성명 또는 비밀번호(연락처 뒤 4자리)가 일치하지 않습니다.');
       } else {
         // [요구사항 2 해결]: 회원이 반려/거절 상태인 경우, 거절 사유를 명확히 보여주고 가입란 수정 가능하게 유도
         if (data.user.status === 'rejected') {
@@ -442,21 +498,22 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                성명 (아이디로 사용) *
+                성명 (한글 2~4자, 아이디로 사용) *
               </label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="예: 홍길동"
+                placeholder="예: 홍길동 (한글 2~4자)"
                 className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
+              <p className="text-[11px] text-gray-500 mt-1">* 한글 2~4자만 가능 (영문, 숫자, 특수문자 불가)</p>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                생년월일 *
+                생년월일 (0000-00-00) *
               </label>
               <input
                 type="text"
@@ -466,6 +523,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 placeholder="예: 1990-01-15 또는 900115"
                 className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
+              <p className="text-[11px] text-gray-500 mt-1">* 어떤 형태로든 0000-00-00 형태로 자동 변환 저장됩니다.</p>
             </div>
           </div>
 
@@ -486,16 +544,17 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
 
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                연락처 (비밀번호로 사용) *
+                연락처 (010-0000-0000) *
               </label>
               <input
                 type="tel"
                 required
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="예: 010-1234-5678"
+                placeholder="예: 010-1234-5678 또는 01012345678"
                 className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
               />
+              <p className="text-[11px] text-gray-500 mt-1">* 010-0000-0000로 저장되며, 뒤 4자리가 로그인 비밀번호가 됩니다.</p>
             </div>
           </div>
 
@@ -549,10 +608,10 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
           </div>
         </form>
       ) : (
-        /* 2. 로그인 폼 (아이디: 성명 / 비밀번호: 연락처) */
+        /* 2. 로그인 폼 (아이디: 성명 / 비밀번호: 연락처 뒤 4자리) */
         <form onSubmit={handleLogin} className="space-y-4 max-w-lg mx-auto">
           <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs text-gray-600">
-            💡 <strong>로그인 안내:</strong> 아이디는 가입하신 <strong>성명</strong>이며, 비밀번호는 <strong>연락처(휴대폰 번호)</strong>입니다.
+            💡 <strong>로그인 안내:</strong> 아이디는 가입하신 <strong>성명</strong>이며, 비밀번호는 <strong>연락처(휴대폰 번호) 뒤 4자리</strong>입니다.
           </div>
 
           <div>
@@ -564,23 +623,24 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
               required
               value={loginName}
               onChange={(e) => setLoginName(e.target.value)}
-              placeholder="가입하신 성명을 입력하세요"
+              placeholder="가입하신 성명을 입력하세요 (예: 홍길동)"
               className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
             />
           </div>
 
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
-              연락처 (비밀번호) *
+              비밀번호 (연락처 뒤 4자리) *
             </label>
             <input
-              type="tel"
+              type="password"
               required
               value={loginPhone}
               onChange={(e) => setLoginPhone(e.target.value)}
-              placeholder="010-0000-0000"
+              placeholder="연락처 뒤 4자리 (예: 5678)"
               className="w-full bg-white border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-carrot focus:ring-1 focus:ring-carrot transition"
             />
+            <p className="text-[11px] text-gray-500 mt-1">* 가입 시 입력하신 휴대폰 번호의 뒤 4자리를 입력해 주세요. (전체 번호 입력도 가능)</p>
           </div>
 
           <div className="pt-2">

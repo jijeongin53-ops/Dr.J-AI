@@ -1,39 +1,63 @@
 import { NextResponse } from 'next/server';
 import { getUsers, addUser, updateUserData } from '@/lib/google/sheets';
 import { MemberUser } from '@/types';
+import { validateKoreanName, formatPhoneNumber, formatBirthDate, getLast4PhoneDigits } from '@/lib/formatters';
 
 // 전화번호 정규화 (숫자만 추출)
 function normalizePhone(phone: string): string {
   return phone.replace(/[^0-9]/g, '');
 }
 
-// 로그인 또는 사용자 목록 조회 (아이디=성명, 비밀번호=연락처)
+// 로그인 또는 사용자 목록 조회 (아이디=성명, 비밀번호=연락처 뒤 4자리 또는 전체 연락처)
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const name = searchParams.get('name');
-  const phoneNumber = searchParams.get('phoneNumber');
+  const phoneNumber = searchParams.get('phoneNumber') || searchParams.get('password');
   const email = searchParams.get('email');
+  const userId = searchParams.get('userId');
 
   const users = await getUsers();
 
-  // 1. 성명(아이디)과 연락처(비밀번호)로 로그인
+  // 0. 사용자 ID 기반 단일 조회 (실시간 상태 동기화용)
+  if (userId) {
+    const user = users.find((u) => u.id === userId);
+    if (user) {
+      if (user.name.trim() === '지정인' || normalizePhone(user.phoneNumber).includes('82030046')) {
+        user.role = 'admin';
+        user.status = 'approved';
+      }
+      return NextResponse.json({ user });
+    }
+  }
+
+  // 1. 성명(아이디)과 연락처 뒤 4자리(비밀번호)로 로그인
   if (name && phoneNumber) {
-    const cleanPhone = normalizePhone(phoneNumber);
-    const user = users.find(
-      (u) =>
-        u.name.trim() === name.trim() &&
-        normalizePhone(u.phoneNumber) === cleanPhone
-    );
+    const cleanInput = normalizePhone(phoneNumber);
+    const user = users.find((u) => {
+      if (u.name.trim() !== name.trim()) return false;
+      const userPhoneClean = normalizePhone(u.phoneNumber);
+      const userLast4 = getLast4PhoneDigits(u.phoneNumber);
+
+      // 1) 비밀번호가 연락처 뒤 4자리인 경우 (예: '7280')
+      if (cleanInput.length === 4 && userLast4 === cleanInput) {
+        return true;
+      }
+      // 2) 연락처 전체 번호 또는 4자리 이상을 입력한 경우 (호환성 및 유연성 제공)
+      if (userPhoneClean === cleanInput || userLast4 === cleanInput.slice(-4)) {
+        return true;
+      }
+      return false;
+    });
 
     if (!user) {
       return NextResponse.json(
-        { error: '일치하는 회원을 찾을 수 없습니다. 성명(아이디)과 연락처(비밀번호)를 다시 확인해 주세요.' },
+        { error: '일치하는 회원을 찾을 수 없습니다. 성명(아이디)과 비밀번호(연락처 뒤 4자리)를 다시 확인해 주세요.' },
         { status: 404 }
       );
     }
 
     // 모임장(지정인) 계정은 항상 최고 관리자(admin) 및 승인 권한 부여
-    if (user.name.trim() === '지정인' || cleanPhone.includes('82030046')) {
+    if (user.name.trim() === '지정인' || normalizePhone(user.phoneNumber).includes('82030046') || cleanInput.includes('82030046')) {
       user.role = 'admin';
       user.status = 'approved';
     }
@@ -67,14 +91,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const users = await getUsers();
-    const cleanPhone = normalizePhone(phoneNumber);
+    // [요구사항 1]: 성명 한글 2~4자 검증 (영문, 숫자, 특수문자 불가)
+    const nameValidation = validateKoreanName(name);
+    if (!nameValidation.valid) {
+      return NextResponse.json(
+        { error: nameValidation.message || '성명은 한글 2~4자 이내로만 입력 가능합니다. (영문, 숫자 불가)' },
+        { status: 400 }
+      );
+    }
 
-    // 중복 가입 체크 (성명 + 연락처가 동일한 경우)
+    // [요구사항 2 & 3]: 연락처(010-0000-0000) 및 생년월일(0000-00-00) 서식 자동 정규화
+    const cleanPhone = formatPhoneNumber(phoneNumber);
+    const cleanBirthDate = formatBirthDate(birthDate);
+    const inputLast4 = getLast4PhoneDigits(phoneNumber);
+
+    const users = await getUsers();
+
+    // [요구사항 4]: 중복 가입 체크 (성명 + 연락처 뒤 4자리가 동일한 경우)
     const existing = users.find(
       (u) =>
         u.name.trim() === name.trim() &&
-        normalizePhone(u.phoneNumber) === cleanPhone
+        getLast4PhoneDigits(u.phoneNumber) === inputLast4
     );
 
     if (existing) {
@@ -91,7 +128,7 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json(
-        { error: '이미 동일한 성명과 연락처로 가입된 계정이 존재합니다.' },
+        { error: '이미 동일한 성명과 연락처(뒤 4자리)로 가입된 계정이 존재합니다.' },
         { status: 409 }
       );
     }
@@ -99,8 +136,8 @@ export async function POST(request: Request) {
     const newUser: MemberUser = {
       id: `user_${Date.now()}`,
       name: name.trim(),
-      phoneNumber: phoneNumber.trim(),
-      birthDate: birthDate.trim(),
+      phoneNumber: cleanPhone,
+      birthDate: cleanBirthDate,
       job: job.trim(),
       email: email.trim(),
       carrotNickname: carrotNickname?.trim() || name.trim(),
@@ -132,13 +169,26 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: '수정할 필수 항목이 누락되었습니다.' }, { status: 400 });
     }
 
+    // [요구사항 1]: 성명 한글 2~4자 검증
+    const nameValidation = validateKoreanName(name);
+    if (!nameValidation.valid) {
+      return NextResponse.json(
+        { error: nameValidation.message || '성명은 한글 2~4자 이내로만 입력 가능합니다.' },
+        { status: 400 }
+      );
+    }
+
+    // [요구사항 2 & 3]: 연락처 및 생년월일 정규화
+    const cleanPhone = formatPhoneNumber(phoneNumber);
+    const cleanBirthDate = formatBirthDate(birthDate);
+
     const updated = await updateUserData(userId, {
-      name,
-      birthDate,
-      job,
-      phoneNumber,
-      email,
-      carrotNickname,
+      name: name.trim(),
+      birthDate: cleanBirthDate,
+      job: job ? job.trim() : '',
+      phoneNumber: cleanPhone,
+      email: email.trim(),
+      carrotNickname: carrotNickname?.trim() || name.trim(),
       status: 'pending', // 수정 후 승인 대기 상태로 재전환
       rejectionReason: '', // 반려 사유 초기화
     });

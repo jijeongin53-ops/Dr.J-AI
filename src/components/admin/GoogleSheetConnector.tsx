@@ -11,14 +11,118 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 import { GOOGLE_SHEET_URL } from '@/lib/constants';
 
 // 구글 시트에 붙여넣을 완성형 Google Apps Script 코드
 export const GAS_SCRIPT_CODE = `// ==========================================
 // [당근 모임] 구글 스프레드시트 자동 연동 스크립트
-// (회원 가입 동기화 + Dr. J 질문 시트 저장 및 jguy12@hanmail.net 자동 메일 발송 지원)
+// - 성명 + 연락처 뒤 4자리 중복 회원 자동 정리
+// - 연락처(010-0000-0000) 및 생년월일(0000-00-00) 서식 정규화
+// - 회원 승인/반려 실시간 업데이트 및 이메일 발송
 // ==========================================
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('🥕 당근 모임 관리')
+    .addItem('✨ 중복 회원 정리 및 서식 일괄 정규화', 'deduplicateAndFormatSheet')
+    .addToUi();
+}
+
+// 전화번호 정규화 (010-0000-0000)
+function formatPhoneGAS(input) {
+  if (!input) return "";
+  var digits = String(input).replace(/\\D/g, "");
+  if (digits.indexOf("82") === 0 && digits.length >= 11) digits = "0" + digits.slice(2);
+  if (digits.indexOf("10") === 0 && digits.length === 10) digits = "0" + digits;
+  if (digits.length === 11) return digits.slice(0, 3) + "-" + digits.slice(3, 7) + "-" + digits.slice(7);
+  if (digits.length === 10) {
+    if (digits.indexOf("02") === 0) return digits.slice(0, 2) + "-" + digits.slice(2, 6) + "-" + digits.slice(6);
+    return digits.slice(0, 3) + "-" + digits.slice(3, 6) + "-" + digits.slice(6);
+  }
+  return digits;
+}
+
+// 생년월일 정규화 (0000-00-00)
+function formatBirthGAS(input) {
+  if (!input) return "";
+  var str = String(input).trim();
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(str)) return str;
+  if (str.indexOf("T") !== -1) {
+    try {
+      var d = new Date(str);
+      var kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+      var y = kst.getUTCFullYear();
+      var m = ("0" + (kst.getUTCMonth() + 1)).slice(-2);
+      var day = ("0" + kst.getUTCDate()).slice(-2);
+      return y + "-" + m + "-" + day;
+    } catch (e) {}
+  }
+  var digits = str.replace(/\\D/g, "");
+  if (digits.length === 5) digits = "0" + digits;
+  if (digits.length >= 8) return digits.slice(0, 4) + "-" + digits.slice(4, 6) + "-" + digits.slice(6, 8);
+  if (digits.length === 6) {
+    var yy = parseInt(digits.slice(0, 2), 10);
+    var prefix = yy > 30 ? "19" : "20";
+    return prefix + digits.slice(0, 2) + "-" + digits.slice(2, 4) + "-" + digits.slice(4, 6);
+  }
+  return str;
+}
+
+// 중복 회원 삭제 및 서식 정규화 실행 함수 (상단 메뉴 또는 웹훅 실행)
+function deduplicateAndFormatSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return { deleted: 0, updated: 0 };
+
+  var seen = {};
+  var rowsToDelete = [];
+  var updatedCount = 0;
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var name = String(row[0] || "").trim();
+    if (!name || name === "test") {
+      rowsToDelete.push(i + 1);
+      continue;
+    }
+    var phoneDigits = String(row[1] || "").replace(/\\D/g, "");
+    var last4 = phoneDigits.slice(-4);
+    var key = name + "_" + last4;
+
+    if (seen[key]) {
+      var prevRowIdx = seen[key];
+      var prevStatus = String(data[prevRowIdx - 1][6] || "").toLowerCase();
+      var currentStatus = String(row[6] || "").toLowerCase();
+      if (currentStatus === "approved" && prevStatus !== "approved") {
+        sheet.getRange(prevRowIdx, 7).setValue("approved");
+      }
+      rowsToDelete.push(i + 1);
+    } else {
+      seen[key] = i + 1;
+      var formattedPhone = formatPhoneGAS(row[1]);
+      var formattedBirth = formatBirthGAS(row[2]);
+      if (formattedPhone && formattedPhone !== String(row[1])) {
+        sheet.getRange(i + 1, 2).setValue("'" + formattedPhone);
+        updatedCount++;
+      }
+      if (formattedBirth && formattedBirth !== String(row[2])) {
+        sheet.getRange(i + 1, 3).setValue(formattedBirth);
+        updatedCount++;
+      }
+    }
+  }
+
+  // 중복 행 아래에서부터 삭제
+  rowsToDelete.sort(function(a, b) { return b - a; });
+  for (var d = 0; d < rowsToDelete.length; d++) {
+    sheet.deleteRow(rowsToDelete[d]);
+  }
+
+  return { deleted: rowsToDelete.length, updated: updatedCount };
+}
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -27,7 +131,6 @@ function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // 1. 전달된 데이터 추출
     var requestData = {};
     if (e.postData && e.postData.contents) {
       try {
@@ -42,21 +145,52 @@ function doPost(e) {
     var action = requestData.action || "addUser";
     var data = requestData.data || requestData;
 
-    // [ACTION 1]: Dr. J에게 물어봐 (시트 자동 기록 + jguy12@hanmail.net 즉시 메일 발송)
+    // [ACTION 0]: 중복 회원 정리 및 서식 정규화
+    if (action === "cleanDuplicates" || action === "deduplicate") {
+      var result = deduplicateAndFormatSheet();
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", deleted: result.deleted, updated: result.updated }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 1]: 회원 권한 및 승인 상태 업데이트
+    if (action === "updateUserRole" || action === "updateUser") {
+      var sheet = ss.getActiveSheet();
+      var rows = sheet.getDataRange().getValues();
+      var targetName = String(data.name || "").trim();
+      var targetPhone = String(data.phoneNumber || "").replace(/\\D/g, "");
+      var targetLast4 = targetPhone.slice(-4);
+      var found = false;
+
+      for (var r = 1; r < rows.length; r++) {
+        var rowName = String(rows[r][0] || "").trim();
+        var rowPhone = String(rows[r][1] || "").replace(/\\D/g, "");
+        var rowLast4 = rowPhone.slice(-4);
+
+        if (rowName === targetName && (rowLast4 === targetLast4 || !targetLast4)) {
+          if (data.role) sheet.getRange(r + 1, 6).setValue(data.role);
+          if (data.status) sheet.getRange(r + 1, 7).setValue(data.status);
+          if (data.rejectionReason !== undefined) sheet.getRange(r + 1, 9).setValue(data.rejectionReason);
+          found = true;
+          break;
+        }
+      }
+
+      if (found) {
+        return ContentService.createTextOutput(JSON.stringify({ result: "success" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ result: "not_found" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 2]: Dr. J에게 물어봐 질문함 저장
     if (action === "askDrJ") {
       var questionSheet = ss.getSheetByName("DrJ_질문함");
       if (!questionSheet) {
         questionSheet = ss.insertSheet("DrJ_질문함");
         var qHeaders = ["접수일시", "성명", "연락처", "답변이메일", "질문제목", "질문내용"];
         questionSheet.appendRow(qHeaders);
-        var qHeaderRange = questionSheet.getRange(1, 1, 1, qHeaders.length);
-        qHeaderRange.setBackground("#EA580C");
-        qHeaderRange.setFontColor("#FFFFFF");
-        qHeaderRange.setFontWeight("bold");
-        qHeaderRange.setHorizontalAlignment("center");
-        questionSheet.setFrozenRows(1);
       }
-
       var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
       var qRow = [
         data.createdAt || nowStr,
@@ -67,84 +201,24 @@ function doPost(e) {
         data.content || ""
       ];
       questionSheet.appendRow(qRow);
-
-      // 모임장 이메일(jguy12@hanmail.net)로 구글 메일 서비스 즉시 발송
-      try {
-        var emailSubject = "[Dr. J에게 물어봐] " + (data.userName || "회원") + "님의 새로운 질문: " + (data.title || "");
-        var emailHtml = '<div style="font-family: sans-serif; max-width: 600px; padding: 20px; border: 1px solid #fed7aa; border-radius: 12px; background: #fff;">'
-          + '<h2 style="color: #ea580c; margin-top:0;">Dr. J에게 새로운 질문이 도착했습니다!</h2>'
-          + '<p><strong>질문자 성명:</strong> ' + (data.userName || "") + '</p>'
-          + '<p><strong>연락처:</strong> ' + (data.phoneNumber || "") + '</p>'
-          + '<p><strong>답변 회신 이메일:</strong> <a href="mailto:' + (data.email || "") + '">' + (data.email || "") + '</a></p>'
-          + '<hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;">'
-          + '<h3 style="color: #111;">제목: ' + (data.title || "") + '</h3>'
-          + '<div style="background: #f9fafb; padding: 15px; border-radius: 8px; white-space: pre-wrap; line-height: 1.6;">' + (data.content || "") + '</div>'
-          + '<p style="color: #888; font-size: 12px; margin-top: 20px;">* 회원의 이메일로 바로 회신하시려면 <a href="mailto:' + (data.email || "") + '">여기</a>를 클릭하세요.</p>'
-          + '</div>';
-
-        MailApp.sendEmail({
-          to: "jguy12@hanmail.net",
-          subject: emailSubject,
-          htmlBody: emailHtml,
-          name: "Dr. J 질문 알림"
-        });
-      } catch (mailErr) {
-        // 메일 발송 로그 기록
-        Logger.log("Mail send error: " + mailErr);
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "askDrJ", row: qRow }))
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "askDrJ" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // [ACTION 2]: 범용 이메일 발송 (회원 승인/반려 안내 등)
-    if (action === "sendEmail") {
-      try {
-        MailApp.sendEmail({
-          to: data.to,
-          subject: data.subject,
-          htmlBody: data.html,
-          body: data.body || "",
-          name: "Dr. J's AI 커뮤니티"
-        });
-        return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "sendEmail", to: data.to }))
-          .setMimeType(ContentService.MimeType.JSON);
-      } catch (err) {
-        return ContentService.createTextOutput(JSON.stringify({ result: "error", message: err.toString() }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
-    // [ACTION 3]: 기본 회원 가입 / 회원 정보 등록
+    // [ACTION 3]: 기본 회원 가입 행 추가
     var sheet = ss.getActiveSheet();
-
-    // 1. 헤더가 없는 경우 첫 번째 행에 자동 생성
     if (sheet.getLastRow() === 0) {
-      var headers = [
-        "성명(아이디)",
-        "연락처(비밀번호)",
-        "생년월일",
-        "직업",
-        "이메일",
-        "회원등급",
-        "승인상태",
-        "가입일시",
-        "비고"
-      ];
+      var headers = ["성명(아이디)", "연락처(비밀번호)", "생년월일", "직업", "이메일", "회원등급", "승인상태", "가입일시", "비고"];
       sheet.appendRow(headers);
-      var headerRange = sheet.getRange(1, 1, 1, headers.length);
-      headerRange.setBackground("#111827");
-      headerRange.setFontColor("#FFFFFF");
-      headerRange.setFontWeight("bold");
-      headerRange.setHorizontalAlignment("center");
-      sheet.setFrozenRows(1);
     }
 
-    // 3. 스프레드시트에 새 행 추가
+    var phoneFormatted = formatPhoneGAS(data.phoneNumber);
+    var birthFormatted = formatBirthGAS(data.birthDate);
+
     var newRow = [
       data.name || "",
-      data.phoneNumber || "",
-      data.birthDate || "",
+      "'" + (phoneFormatted || data.phoneNumber || ""),
+      birthFormatted || data.birthDate || "",
       data.job || "",
       data.email || "",
       data.role || "guest",
@@ -180,6 +254,46 @@ export function GoogleSheetConnector() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanResult, setCleanResult] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  const handleCleanDuplicates = async () => {
+    const url = gasUrl.trim() || (typeof window !== 'undefined' ? localStorage.getItem('DR_J_GAS_URL') : '') || '';
+    if (!url) {
+      alert('Google Apps Script 웹 앱 URL이 설정되지 않았습니다.');
+      return;
+    }
+
+    setCleaning(true);
+    setCleanResult(null);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deduplicate' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.result === 'success') {
+        setCleanResult({
+          success: true,
+          message: `구글 시트 중복 데이터 정리 완료! (중복 삭제: ${data.deleted || 0}건, 서식 정규화: ${data.updated || 0}건)`,
+        });
+      } else {
+        setCleanResult({
+          success: false,
+          message: 'Apps Script에 최신 코드가 아직 반영되지 않았습니다. 상단 스크립트 코드를 구글 시트 Apps Script에 붙여넣고 저장해 주세요.',
+        });
+      }
+    } catch (e: any) {
+      setCleanResult({
+        success: false,
+        message: '통신 오류: 구글 시트 상단 메뉴 [데이터 ➔ 데이터 정리 ➔ 중복 항목 삭제]를 이용하시거나 상단 스크립트를 재배포해 주세요.',
+      });
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   // 로컬 스토리지에 캐시된 URL 복원
   useEffect(() => {
@@ -394,6 +508,62 @@ export function GoogleSheetConnector() {
             </div>
           </div>
         )}
+
+        {/* [요구사항 4]: 구글 시트 중복 데이터 원클릭 정리 및 서식 정규화 박스 */}
+        <div className="mt-4 p-4 rounded-xl border border-blue-200 bg-blue-50/70 space-y-3 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-carrot" />
+              <h3 className="font-bold text-gray-900">
+                구글 시트 중복 회원 정리 &amp; 서식 정규화 (성명 + 연락처 뒤 4자리 일치 삭제)
+              </h3>
+            </div>
+            <button
+              type="button"
+              disabled={cleaning}
+              onClick={handleCleanDuplicates}
+              className="px-3.5 py-1.5 bg-carrot hover:bg-carrot-hover text-white rounded-lg font-bold flex items-center justify-center gap-1.5 transition shadow-sm disabled:opacity-50 shrink-0"
+            >
+              {cleaning ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>정리 중...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>웹훅으로 중복 데이터 정리 실행</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="text-gray-600 leading-relaxed text-[11px] space-y-1">
+            <p>
+              • <strong>자동 기능:</strong> 이름과 연락처 뒤 4자리가 일치하는 중복 행을 자동 정리하며, 연락처는 <code>010-0000-0000</code>, 생년월일은 <code>0000-00-00</code> 형태로 일괄 정규화합니다.
+            </p>
+            <p>
+              • <strong>구글 시트 상단 메뉴 직접 실행:</strong> 상단 스크립트를 Apps Script에 복사해 넣으시면 구글 시트 상단 메뉴에 <strong>[🥕 당근 모임 관리] ➔ [✨ 중복 회원 정리 및 서식 일괄 정규화]</strong>가 자동 생성되어 시트 화면에서 원클릭으로 정리하실 수 있습니다.
+            </p>
+          </div>
+
+          {cleanResult && (
+            <div
+              className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                cleanResult.success
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}
+            >
+              {cleanResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              )}
+              <span>{cleanResult.message}</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

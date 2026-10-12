@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { MemberUser, Lecture, Comment, ChatMessage, DrJQuestion, LectureReview } from '@/types';
 import { GOOGLE_SHEET_ID, GOOGLE_APPS_SCRIPT_DEFAULT_URL } from '../constants';
+import { formatPhoneNumber, formatBirthDate, getLast4PhoneDigits } from '../formatters';
 
 // 구글 인증 클라이언트 생성 (서비스 계정)
 function getGoogleAuth() {
@@ -87,6 +88,8 @@ export async function getSheetData<T>(sheetName: string, fallbackData: T[]): Pro
 
 /**
  * 사용자 목록 조회 (구글 스프레드시트 실시간 동기화 및 가상 회원 제외)
+ * - 이름과 연락처 뒤 4자리가 일치하는 데이터 중복 제거
+ * - 전화번호(010-0000-0000) 및 생년월일(0000-00-00) 서식 자동 정규화
  */
 export async function getUsers(): Promise<MemberUser[]> {
   const gasUrl = getRuntimeGasUrl();
@@ -98,17 +101,19 @@ export async function getUsers(): Promise<MemberUser[]> {
         const rows: any[][] = json.rows || [];
         // 첫 번째 행은 헤더이므로 rows.slice(1) 사용
         if (rows.length > 1) {
-          const sheetUsers: MemberUser[] = rows
+          const parsedUsers: MemberUser[] = rows
             .slice(1)
             .map((r, idx) => {
               const name = String(r[0] || '').trim();
-              const phone = String(r[1] || '').trim();
-              const isJjyAdmin = name === '지정인' || phone.includes('82030046');
+              const rawPhone = String(r[1] || '').trim();
+              const phone = formatPhoneNumber(rawPhone);
+              const birthDate = formatBirthDate(r[2]);
+              const isJjyAdmin = name === '지정인' || phone.includes('82030046') || rawPhone.includes('82030046');
               return {
                 id: `sheet_user_${idx + 1}`,
                 name: name,
                 phoneNumber: phone,
-                birthDate: String(r[2] || '').trim(),
+                birthDate: birthDate,
                 job: String(r[3] || '').trim(),
                 email: String(r[4] || '').trim(),
                 carrotNickname: name,
@@ -118,7 +123,33 @@ export async function getUsers(): Promise<MemberUser[]> {
                 note: String(r[8] || '').trim(),
               };
             })
-            .filter((u) => u.name); // 이름이 있는 실제 회원만 추출
+            .filter((u) => u.name && u.name !== 'test' && u.name !== '성명(아이디)'); // 이름이 있는 실제 회원만 추출 및 테스트용 행 제외
+
+          // [요구사항 4]: 이름과 연락처 뒤에 4자리가 일치하는 데이터 중 중복되는 데이터는 자동 병합/삭제
+          const deduplicatedMap = new Map<string, MemberUser>();
+          for (const u of parsedUsers) {
+            const last4 = getLast4PhoneDigits(u.phoneNumber);
+            const key = `${u.name}_${last4}`;
+
+            if (!deduplicatedMap.has(key)) {
+              deduplicatedMap.set(key, { ...u });
+            } else {
+              // 이미 존재하는 회원인 경우: 승인 상태(approved)나 관리자(admin) 권한을 우선 병합
+              const existing = deduplicatedMap.get(key)!;
+              if (u.status === 'approved' && existing.status !== 'approved') {
+                existing.status = 'approved';
+              }
+              if (u.role === 'admin') {
+                existing.role = 'admin';
+              }
+              if (u.birthDate && !existing.birthDate) existing.birthDate = u.birthDate;
+              if (u.job && !existing.job) existing.job = u.job;
+              if (u.email && !existing.email) existing.email = u.email;
+              if (u.phoneNumber && u.phoneNumber.includes('-')) existing.phoneNumber = u.phoneNumber;
+            }
+          }
+
+          const sheetUsers = Array.from(deduplicatedMap.values());
 
           if (sheetUsers.length > 0) {
             inMemoryUsers = sheetUsers;
@@ -149,7 +180,15 @@ export function getRuntimeGasUrl(): string {
  * 사용자 추가 (회원가입) - 구글 시트에 자동 영구 저장
  */
 export async function addUser(user: MemberUser): Promise<{ user: MemberUser; sheetSaved: boolean; error?: string }> {
+  // 전화번호 및 생년월일 정규화 (010-0000-0000, 0000-00-00)
+  user.phoneNumber = formatPhoneNumber(user.phoneNumber);
+  user.birthDate = formatBirthDate(user.birthDate);
+
+  // 메모리 내 중복 방지 (성명 + 연락처 뒤 4자리 기준)
+  const last4 = getLast4PhoneDigits(user.phoneNumber);
+  inMemoryUsers = inMemoryUsers.filter((u) => !(u.name === user.name && getLast4PhoneDigits(u.phoneNumber) === last4));
   inMemoryUsers.push(user);
+
   let sheetSaved = false;
   let saveError: string | undefined;
 
@@ -296,8 +335,8 @@ export async function updateUserData(
   const target = inMemoryUsers.find((u) => u.id === userId);
   if (target) {
     if (data.name) target.name = data.name.trim();
-    if (data.phoneNumber) target.phoneNumber = data.phoneNumber.trim();
-    if (data.birthDate) target.birthDate = data.birthDate.trim();
+    if (data.phoneNumber) target.phoneNumber = formatPhoneNumber(data.phoneNumber.trim());
+    if (data.birthDate) target.birthDate = formatBirthDate(data.birthDate.trim());
     if (data.job) target.job = data.job.trim();
     if (data.email) target.email = data.email.trim();
     if (data.carrotNickname) target.carrotNickname = data.carrotNickname.trim();

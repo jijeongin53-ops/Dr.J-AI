@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { MemberUser, MemberRole, MemberStatus } from '@/types';
+import { getCurrentUser, setCurrentUser } from '@/lib/auth';
 import { RoleBadge } from '../common/RoleBadge';
 import { UserCheck, RefreshCw, CheckCircle2, AlertCircle, X, Mail, AlertTriangle } from 'lucide-react';
 
@@ -70,6 +71,19 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
             u.id === userId ? { ...u, role, status, rejectionReason } : u
           )
         );
+
+        // [요구사항 5]: 관리자 센터에서 승인 완료 시 회원에게 실시간 즉시 반영
+        try {
+          const channel = new BroadcastChannel('daangn_auth_sync');
+          channel.postMessage({ type: 'USER_UPDATED', userId, role, status });
+          channel.close();
+        } catch (_) {}
+
+        const currentLocal = getCurrentUser();
+        if (currentLocal && (currentLocal.id === userId || currentLocal.name === data.user?.name)) {
+          setCurrentUser({ ...currentLocal, role, status });
+        }
+
         setFeedbackMsg({
           id: userId,
           text: data.message || '등급 및 승인 상태가 구글 시트에 즉시 반영되었습니다.',
