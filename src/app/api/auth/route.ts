@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getUsers, addUser, updateUserData } from '@/lib/google/sheets';
+import { getUsers, addUser, updateUserData, recordUserLogin } from '@/lib/google/sheets';
 import { MemberUser } from '@/types';
 import { validateKoreanName, formatPhoneNumber, formatBirthDate, getLast4PhoneDigits } from '@/lib/formatters';
 
@@ -61,6 +61,11 @@ export async function GET(request: Request) {
       user.role = 'admin';
       user.status = 'approved';
     }
+
+    // 구글 스프레드시트 [회원 로그인 현황] 시트에 로그인 일시 자동 기록 (비동기)
+    recordUserLogin(user.name).catch((err) =>
+      console.warn('[Activity] 로그인 기록 실패:', err)
+    );
 
     return NextResponse.json({ user });
   }

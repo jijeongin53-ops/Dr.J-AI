@@ -21,13 +21,43 @@ export const GAS_SCRIPT_CODE = `// ==========================================
 // - 성명 + 연락처 뒤 4자리 중복 회원 자동 정리
 // - 연락처(010-0000-0000) 및 생년월일(0000-00-00) 서식 정규화
 // - 회원 승인/반려 실시간 업데이트 및 이메일 발송
+// - [회원 로그인 현황] 자동 기록 (회원명 / 접속일 / 강의실 입장 현황 / 자료 다운로드 현황)
 // ==========================================
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('🥕 당근 모임 관리')
     .addItem('✨ 중복 회원 정리 및 서식 일괄 정규화', 'deduplicateAndFormatSheet')
+    .addItem('📋 [회원 로그인 현황] 시트 생성 및 확인', 'setupLoginStatusSheet')
     .addToUi();
+}
+
+// [회원 로그인 현황] 시트 생성 및 헤더 서식 설정 함수
+function setupLoginStatusSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName("회원 로그인 현황");
+  if (!sheet) {
+    sheet = ss.insertSheet("회원 로그인 현황");
+  }
+  var headers = ["회원명", "접속일", "강의실 입장 현황", "자료 다운로드 현황"];
+  var currentHeader = "";
+  if (sheet.getLastRow() > 0) {
+    currentHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+  }
+  if (currentHeader !== "회원명") {
+    sheet.getRange(1, 1, 1, 4).setValues([headers]);
+    sheet.getRange(1, 1, 1, 4)
+      .setBackground("#EBF3FA")
+      .setFontColor("#1E3A8A")
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 120); // 회원명
+    sheet.setColumnWidth(2, 180); // 접속일 (시간 포함)
+    sheet.setColumnWidth(3, 280); // 강의실 입장 현황
+    sheet.setColumnWidth(4, 280); // 자료 다운로드 현황
+  }
+  return sheet;
 }
 
 // 전화번호 정규화 (010-0000-0000)
@@ -205,31 +235,129 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // [ACTION 3]: 기본 회원 가입 행 추가
-    var sheet = ss.getActiveSheet();
-    if (sheet.getLastRow() === 0) {
-      var headers = ["성명(아이디)", "연락처(비밀번호)", "생년월일", "직업", "이메일", "회원등급", "승인상태", "가입일시", "비고"];
-      sheet.appendRow(headers);
+    // [ACTION 3]: Dr. J 질문함 끝
+
+    // [ACTION 4]: 회원 로그인 기록 (시간 포함 자동 저장)
+    if (action === "recordLogin") {
+      var logSheet = setupLoginStatusSheet();
+      var userName = String(data.name || data.userName || "").trim();
+      if (!userName) {
+        return ContentService.createTextOutput(JSON.stringify({ result: "error", message: "회원명 누락" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+      var loginTime = data.time || data.loginTime || nowStr;
+
+      var newRow = [userName, loginTime, "-", "-"];
+      logSheet.appendRow(newRow);
+
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "recordLogin", row: newRow }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var phoneFormatted = formatPhoneGAS(data.phoneNumber);
-    var birthFormatted = formatBirthGAS(data.birthDate);
+    // [ACTION 5]: 강의실 입장 현황 기록 (시간 및 강의명 포함)
+    if (action === "recordRoomEntry") {
+      var logSheet = setupLoginStatusSheet();
+      var userName = String(data.name || data.userName || "").trim();
+      var lectureTitle = String(data.lectureTitle || data.title || "실시간 강의실").trim();
+      var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+      var entryTime = data.time || nowStr;
+      var entryText = entryTime + " [" + lectureTitle + "] 입장";
 
-    var newRow = [
-      data.name || "",
-      "'" + (phoneFormatted || data.phoneNumber || ""),
-      birthFormatted || data.birthDate || "",
-      data.job || "",
-      data.email || "",
-      data.role || "guest",
-      data.status || "pending",
-      data.joinedAt || Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
-      data.note || "웹 신규 가입"
-    ];
+      var dataRange = logSheet.getDataRange().getValues();
+      var foundRowIdx = -1;
+      for (var i = dataRange.length - 1; i >= 1; i--) {
+        if (String(dataRange[i][0] || "").trim() === userName) {
+          foundRowIdx = i + 1;
+          break;
+        }
+      }
 
-    sheet.appendRow(newRow);
+      if (foundRowIdx !== -1) {
+        var prevText = String(logSheet.getRange(foundRowIdx, 3).getValue() || "").trim();
+        if (prevText && prevText !== "-") {
+          logSheet.getRange(foundRowIdx, 3).setValue(prevText + " \n" + entryText);
+        } else {
+          logSheet.getRange(foundRowIdx, 3).setValue(entryText);
+        }
+      } else {
+        logSheet.appendRow([userName, nowStr, entryText, "-"]);
+      }
 
-    return ContentService.createTextOutput(JSON.stringify({ result: "success", row: newRow }))
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "recordRoomEntry", text: entryText }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 6]: 자료 다운로드 현황 기록 (시간 및 파일명 포함)
+    if (action === "recordDownload") {
+      var logSheet = setupLoginStatusSheet();
+      var userName = String(data.name || data.userName || "").trim();
+      var materialName = String(data.materialName || data.name || "강의 자료").trim();
+      var nowStr = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
+      var downloadTime = data.time || nowStr;
+      var downloadText = downloadTime + " [" + materialName + "] 다운로드";
+
+      var dataRange = logSheet.getDataRange().getValues();
+      var foundRowIdx = -1;
+      for (var i = dataRange.length - 1; i >= 1; i--) {
+        if (String(dataRange[i][0] || "").trim() === userName) {
+          foundRowIdx = i + 1;
+          break;
+        }
+      }
+
+      if (foundRowIdx !== -1) {
+        var prevText = String(logSheet.getRange(foundRowIdx, 4).getValue() || "").trim();
+        if (prevText && prevText !== "-") {
+          logSheet.getRange(foundRowIdx, 4).setValue(prevText + " \n" + downloadText);
+        } else {
+          logSheet.getRange(foundRowIdx, 4).setValue(downloadText);
+        }
+      } else {
+        logSheet.appendRow([userName, nowStr, "-", downloadText]);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "recordDownload", text: downloadText }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 7]: 로그인 현황 시트 초기화 및 확인
+    if (action === "setupLoginStatusSheet") {
+      var sheet = setupLoginStatusSheet();
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", message: "회원 로그인 현황 시트 준비 완료" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 8]: 기본 회원 가입 행 추가
+    if (action === "addUser" || (data.name && data.phoneNumber && !action)) {
+      var sheet = ss.getSheetByName("Users") || ss.getActiveSheet();
+      if (sheet.getLastRow() === 0) {
+        var headers = ["성명(아이디)", "연락처(비밀번호)", "생년월일", "직업", "이메일", "회원등급", "승인상태", "가입일시", "비고"];
+        sheet.appendRow(headers);
+      }
+
+      var phoneFormatted = formatPhoneGAS(data.phoneNumber);
+      var birthFormatted = formatBirthGAS(data.birthDate);
+
+      var newRow = [
+        data.name || "",
+        "'" + (phoneFormatted || data.phoneNumber || ""),
+        birthFormatted || data.birthDate || "",
+        data.job || "",
+        data.email || "",
+        data.role || "guest",
+        data.status || "pending",
+        data.joinedAt || Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd HH:mm:ss"),
+        data.note || "웹 신규 가입"
+      ];
+
+      sheet.appendRow(newRow);
+
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", row: newRow }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ result: "ignored", message: "미처리 액션: " + action }))
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch (error) {
@@ -241,9 +369,19 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetParam = (e && e.parameter && e.parameter.sheet) || "";
+  var sheet;
+  if (sheetParam === "login_status" || sheetParam === "회원 로그인 현황") {
+    sheet = ss.getSheetByName("회원 로그인 현황");
+    if (!sheet) {
+      sheet = setupLoginStatusSheet();
+    }
+  } else {
+    sheet = ss.getSheetByName("Users") || ss.getActiveSheet();
+  }
   var data = sheet.getDataRange().getValues();
-  return ContentService.createTextOutput(JSON.stringify({ status: "ok", count: data.length, rows: data }))
+  return ContentService.createTextOutput(JSON.stringify({ status: "ok", sheet: sheet.getName(), count: data.length, rows: data }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 `;
@@ -256,6 +394,46 @@ export function GoogleSheetConnector() {
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string } | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [cleanResult, setCleanResult] = useState<{ success?: boolean; message?: string } | null>(null);
+  const [setupLoading, setSetupLoading] = useState(false);
+  const [setupResult, setSetupResult] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  const handleSetupLoginStatusSheet = async () => {
+    const url = gasUrl.trim() || (typeof window !== 'undefined' ? localStorage.getItem('DR_J_GAS_URL') : '') || '';
+    if (!url) {
+      alert('Google Apps Script 웹 앱 URL이 설정되지 않았습니다.');
+      return;
+    }
+
+    setSetupLoading(true);
+    setSetupResult(null);
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setupLoginStatusSheet' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.result === 'success') {
+        setSetupResult({
+          success: true,
+          message: '구글 시트에 [회원 로그인 현황] 탭이 성공적으로 생성 및 연결되었습니다! (회원명 / 접속일 / 강의실 입장 현황 / 자료 다운로드 현황)',
+        });
+      } else {
+        setSetupResult({
+          success: false,
+          message: 'Apps Script에 최신 스크립트 코드를 반영 후 [배포 > 새 배포]를 진행해 주세요.',
+        });
+      }
+    } catch (e: any) {
+      setSetupResult({
+        success: false,
+        message: '통신 오류: 상단 최신 스크립트 코드를 복사하여 구글 시트 Apps Script에 저장 후 새 배포를 진행해 주세요.',
+      });
+    } finally {
+      setSetupLoading(false);
+    }
+  };
 
   const handleCleanDuplicates = async () => {
     const url = gasUrl.trim() || (typeof window !== 'undefined' ? localStorage.getItem('DR_J_GAS_URL') : '') || '';
@@ -561,6 +739,62 @@ export function GoogleSheetConnector() {
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
               )}
               <span>{cleanResult.message}</span>
+            </div>
+          )}
+        </div>
+
+        {/* [회원 로그인 현황]: 구글 시트 회원 로그인 및 활동 기록 자동 연동 박스 */}
+        <div className="mt-4 p-4 rounded-xl border border-indigo-200 bg-indigo-50/60 space-y-3 text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+              <h3 className="font-bold text-gray-900">
+                구글 시트 [회원 로그인 현황] 자동 저장 (회원명 / 접속일 / 강의실 입장 현황 / 자료 다운로드 현황)
+              </h3>
+            </div>
+            <button
+              type="button"
+              disabled={setupLoading}
+              onClick={handleSetupLoginStatusSheet}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold flex items-center justify-center gap-1.5 transition shadow-sm disabled:opacity-50 shrink-0"
+            >
+              {setupLoading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>연동 확인 중...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>[회원 로그인 현황] 시트 생성 및 연동 확인</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="text-gray-600 leading-relaxed text-[11px] space-y-1">
+            <p>
+              • <strong>자동 기록 항목:</strong> 회원 로그인(접속) 시 <code>접속일</code>에 초 단위 시간(<code>YYYY-MM-DD HH:mm:ss</code>)이 기록되며, 실시간 강의실 입장 시 <code>강의실 입장 현황</code>, 자료 다운로드 시 <code>자료 다운로드 현황</code>에 시간과 함께 자동 누적 저장됩니다.
+            </p>
+            <p>
+              • <strong>시트 자동 관리:</strong> 시트에 [회원 로그인 현황] 탭이 없더라도 첫 로그인이나 위 버튼 클릭 시 자동 생성되며 파스텔 블루 헤더 서식이 적용됩니다.
+            </p>
+          </div>
+
+          {setupResult && (
+            <div
+              className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                setupResult.success
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}
+            >
+              {setupResult.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              )}
+              <span>{setupResult.message}</span>
             </div>
           )}
         </div>

@@ -10,6 +10,7 @@ import {
   checkInRoomAttendance,
 } from '@/lib/lectureRoom';
 import { MemberUser } from '@/types';
+import { recordLectureRoomEntry } from '@/lib/google/sheets';
 
 // 강의실 참여 및 대기 현황 조회
 export async function GET(
@@ -49,6 +50,14 @@ export async function POST(
         return NextResponse.json({ error: '회원 정보가 필요합니다.' }, { status: 400 });
       }
       const result = enterLectureRoom(lectureId, user as MemberUser, maxAttendees);
+
+      // 구글 스프레드시트 [회원 로그인 현황] 시트에 강의실 입장 현황 자동 기록 (비동기)
+      if (result.status === 'entered' && (user as MemberUser)?.name) {
+        recordLectureRoomEntry((user as MemberUser).name, title || `강의 #${lectureId}`).catch((err) =>
+          console.warn('[Activity] 강의실 입장 기록 실패:', err)
+        );
+      }
+
       return NextResponse.json({
         success: true,
         status: result.status,

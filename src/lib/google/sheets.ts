@@ -1,7 +1,7 @@
 import { google } from 'googleapis';
-import { MemberUser, Lecture, Comment, ChatMessage, DrJQuestion, LectureReview } from '@/types';
+import { MemberUser, Lecture, Comment, ChatMessage, DrJQuestion, LectureReview, MemberLoginLog } from '@/types';
 import { GOOGLE_SHEET_ID, GOOGLE_APPS_SCRIPT_DEFAULT_URL } from '../constants';
-import { formatPhoneNumber, formatBirthDate, getLast4PhoneDigits } from '../formatters';
+import { formatPhoneNumber, formatBirthDate, getLast4PhoneDigits, getKoreanNowString } from '../formatters';
 
 // 구글 인증 클라이언트 생성 (서비스 계정)
 function getGoogleAuth() {
@@ -627,4 +627,198 @@ export async function getChats(): Promise<ChatMessage[]> {
 export async function addChat(chat: ChatMessage): Promise<ChatMessage> {
   inMemoryChats.push(chat);
   return chat;
+}
+
+// ==========================================
+// [구글 시트] 회원 로그인 현황 및 활동 기록 관리
+// 항목: 회원명 / 접속일 / 강의실 입장 현황 / 자료 다운로드 현황
+// ==========================================
+
+let inMemoryLoginLogs: MemberLoginLog[] = [];
+
+/**
+ * 구글 시트 [회원 로그인 현황] 시트에 회원 로그인 기록 (시간 포함 자동 저장)
+ */
+export async function recordUserLogin(userName: string): Promise<boolean> {
+  const cleanName = (userName || '').trim();
+  if (!cleanName) return false;
+
+  const nowStr = getKoreanNowString();
+  const logItem: MemberLoginLog = {
+    id: `log_${Date.now()}`,
+    userName: cleanName,
+    loginAt: nowStr,
+    roomStatus: '-',
+    downloadStatus: '-',
+  };
+
+  inMemoryLoginLogs.unshift(logItem);
+
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'recordLogin',
+          data: {
+            userName: cleanName,
+            name: cleanName,
+            time: nowStr,
+          },
+        }),
+      }).catch((e) => console.warn('[Google Sheets] 로그인 현황 기록 비동기 실패:', e.message));
+    } catch (_) {}
+  }
+
+  const auth = getGoogleAuth();
+  if (auth) {
+    try {
+      const sheets = google.sheets({ version: 'v4', auth });
+      const rowData = [cleanName, nowStr, '-', '-'];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: GOOGLE_SHEET_ID,
+        range: '회원 로그인 현황!A:D',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [rowData] },
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  return true;
+}
+
+/**
+ * 구글 시트 [회원 로그인 현황] 시트에 강의실 입장 현황 기록 (시간 및 강의명 포함)
+ */
+export async function recordLectureRoomEntry(userName: string, lectureTitle: string): Promise<boolean> {
+  const cleanName = (userName || '').trim();
+  if (!cleanName) return false;
+
+  const nowStr = getKoreanNowString();
+  const title = (lectureTitle || '실시간 강의실').trim();
+  const entryText = `${nowStr} [${title}] 입장`;
+
+  // 메모리 내 최신 항목 갱신
+  const existing = inMemoryLoginLogs.find((l) => l.userName === cleanName);
+  if (existing) {
+    existing.roomStatus = existing.roomStatus && existing.roomStatus !== '-'
+      ? `${existing.roomStatus}\n${entryText}`
+      : entryText;
+  } else {
+    inMemoryLoginLogs.unshift({
+      id: `log_${Date.now()}`,
+      userName: cleanName,
+      loginAt: nowStr,
+      roomStatus: entryText,
+      downloadStatus: '-',
+    });
+  }
+
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'recordRoomEntry',
+          data: {
+            userName: cleanName,
+            name: cleanName,
+            lectureTitle: title,
+            title: title,
+            time: nowStr,
+          },
+        }),
+      }).catch((e) => console.warn('[Google Sheets] 강의실 입장 현황 기록 실패:', e.message));
+    } catch (_) {}
+  }
+
+  return true;
+}
+
+/**
+ * 구글 시트 [회원 로그인 현황] 시트에 자료 다운로드 현황 기록 (시간 및 파일명 포함)
+ */
+export async function recordMaterialDownload(userName: string, materialName: string): Promise<boolean> {
+  const cleanName = (userName || '').trim();
+  if (!cleanName) return false;
+
+  const nowStr = getKoreanNowString();
+  const matName = (materialName || '강의 자료').trim();
+  const downloadText = `${nowStr} [${matName}] 다운로드`;
+
+  // 메모리 내 최신 항목 갱신
+  const existing = inMemoryLoginLogs.find((l) => l.userName === cleanName);
+  if (existing) {
+    existing.downloadStatus = existing.downloadStatus && existing.downloadStatus !== '-'
+      ? `${existing.downloadStatus}\n${downloadText}`
+      : downloadText;
+  } else {
+    inMemoryLoginLogs.unshift({
+      id: `log_${Date.now()}`,
+      userName: cleanName,
+      loginAt: nowStr,
+      roomStatus: '-',
+      downloadStatus: downloadText,
+    });
+  }
+
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'recordDownload',
+          data: {
+            userName: cleanName,
+            name: cleanName,
+            materialName: matName,
+            time: nowStr,
+          },
+        }),
+      }).catch((e) => console.warn('[Google Sheets] 자료 다운로드 현황 기록 실패:', e.message));
+    } catch (_) {}
+  }
+
+  return true;
+}
+
+/**
+ * [회원 로그인 현황] 목록 조회
+ */
+export async function getLoginLogs(): Promise<MemberLoginLog[]> {
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      const url = new URL(gasUrl);
+      url.searchParams.set('sheet', 'login_status');
+      const res = await fetch(url.toString(), { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        const rows: any[][] = json.rows || [];
+        if (rows.length > 1) {
+          const parsedLogs: MemberLoginLog[] = rows.slice(1).map((r, idx) => ({
+            id: `log_${idx + 1}`,
+            userName: String(r[0] || '').trim(),
+            loginAt: String(r[1] || '').trim(),
+            roomStatus: String(r[2] || '-').trim(),
+            downloadStatus: String(r[3] || '-').trim(),
+          })).filter((l) => l.userName && l.userName !== '회원명');
+
+          if (parsedLogs.length > 0) {
+            inMemoryLoginLogs = parsedLogs;
+            return parsedLogs;
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Google Sheets] 로그인 현황 조회 실패:', e.message);
+    }
+  }
+  return inMemoryLoginLogs;
 }

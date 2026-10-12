@@ -10,9 +10,10 @@ import { getDriveViewerUrl } from '@/lib/google/drive';
 interface MaterialListProps {
   materials: LectureMaterial[];
   userRole?: MemberRole;
+  userName?: string;
 }
 
-export function MaterialList({ materials, userRole }: MaterialListProps) {
+export function MaterialList({ materials, userRole, userName }: MaterialListProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
 
@@ -43,6 +44,7 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
           driveFileId: material.driveFileId,
           fileUrl: material.fileUrl,
           materialName: material.name,
+          userName: userName || '',
         }),
       });
 

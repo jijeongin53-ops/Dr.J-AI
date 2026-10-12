@@ -136,3 +136,20 @@ export function formatBirthDate(input: any): string {
 
   return str;
 }
+
+/**
+ * 한국 표준시(KST) 기준 현재 일시 반환 (YYYY-MM-DD HH:mm:ss)
+ * 구글 시트 회원 로그인 현황 및 활동 시간 기록용
+ */
+export function getKoreanNowString(): string {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const kst = new Date(utc + 9 * 3600000);
+  const y = kst.getFullYear();
+  const m = String(kst.getMonth() + 1).padStart(2, '0');
+  const d = String(kst.getDate()).padStart(2, '0');
+  const hh = String(kst.getHours()).padStart(2, '0');
+  const mm = String(kst.getMinutes()).padStart(2, '0');
+  const ss = String(kst.getSeconds()).padStart(2, '0');
+  return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+}

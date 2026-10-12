@@ -146,6 +146,7 @@ export default function LectureDetailPage() {
       <section>
         <LectureRoomManager
           lectureId={lecture.id}
+          lectureTitle={lecture.title}
           maxAttendees={lecture.maxAttendees ?? 30}
           currentUser={currentUser}
           initialStartTime={lecture.startTime}
@@ -248,6 +249,7 @@ export default function LectureDetailPage() {
           <MaterialList
             materials={lecture.materials}
             userRole={currentUser?.role}
+            userName={currentUser?.name}
           />
 
           <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 text-xs text-gray-500 leading-relaxed">

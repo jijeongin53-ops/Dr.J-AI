@@ -27,6 +27,7 @@ import {
 
 interface LectureRoomManagerProps {
   lectureId: string;
+  lectureTitle?: string;
   maxAttendees?: number;
   currentUser: MemberUser | null;
   initialStartTime?: string;
@@ -35,6 +36,7 @@ interface LectureRoomManagerProps {
 
 export function LectureRoomManager({
   lectureId,
+  lectureTitle,
   maxAttendees = 30,
   currentUser,
   initialStartTime = '',
@@ -197,6 +199,7 @@ export function LectureRoomManager({
           action: 'enter',
           user: currentUser,
           maxAttendees: currentMax,
+          title: lectureTitle,
         }),
       });
       const data = await res.json();

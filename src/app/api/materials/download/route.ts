@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server';
 import { MemberRole } from '@/types';
 import { hasRequiredRole, getDriveDownloadUrl, getDriveViewerUrl } from '@/lib/google/drive';
+import { recordMaterialDownload } from '@/lib/google/sheets';
 
 // 등급별 파일 다운로드 권한 검증 및 링크 반환 API
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { userRole, minDownloadRole, driveFileId, fileUrl, materialName } = body as {
+    const { userRole, minDownloadRole, driveFileId, fileUrl, materialName, userName } = body as {
       userRole?: MemberRole;
       minDownloadRole: MemberRole;
       driveFileId?: string;
       fileUrl?: string;
       materialName: string;
+      userName?: string;
     };
 
     if (!userRole) {
@@ -43,6 +45,13 @@ export async function POST(request: Request) {
       : `https://drive.google.com/drive/folders/1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo`;
 
     const viewerUrl = targetSource ? getDriveViewerUrl(targetSource) : downloadUrl;
+
+    // 구글 스프레드시트 [회원 로그인 현황] 시트에 자료 다운로드 현황 자동 기록 (비동기)
+    if (userName) {
+      recordMaterialDownload(userName, materialName || '강의 자료').catch((err) =>
+        console.warn('[Activity] 자료 다운로드 기록 실패:', err)
+      );
+    }
 
     return NextResponse.json({
       downloadUrl,

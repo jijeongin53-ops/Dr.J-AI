@@ -137,3 +137,12 @@ export interface AttendanceRecord {
   checkedAt: string;
   isSelfChecked: boolean; // 회원이 직접 푸시를 눌러 체크했는지 여부
 }
+
+// 구글 스프레드시트 [회원 로그인 현황] 항목 인터페이스
+export interface MemberLoginLog {
+  id?: string;
+  userName: string; // 회원명
+  loginAt: string; // 접속일 (시간 포함: YYYY-MM-DD HH:mm:ss)
+  roomStatus: string; // 강의실 입장 현황 (시간 및 강의명)
+  downloadStatus: string; // 자료 다운로드 현황 (시간 및 자료명)
+}

@@ -16,6 +16,19 @@ export default function HomePage() {
     const syncUser = () => {
       const user = getCurrentUser();
       setCurrentUser(user);
+
+      // 구글 스프레드시트 [회원 로그인 현황] 자동 저장 (세션당 1회 자동 기록)
+      if (user && user.name) {
+        const sessionKey = `access_logged_${user.id}`;
+        if (typeof window !== 'undefined' && !sessionStorage.getItem(sessionKey)) {
+          sessionStorage.setItem(sessionKey, 'true');
+          fetch('/api/activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'login', userName: user.name }),
+          }).catch(() => {});
+        }
+      }
     };
     syncUser();
 

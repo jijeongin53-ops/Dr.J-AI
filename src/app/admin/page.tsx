@@ -7,6 +7,8 @@ import { initialUsers, initialLectures } from '@/lib/mockData';
 import { MemberManager } from '@/components/admin/MemberManager';
 import { LectureUploader } from '@/components/admin/LectureUploader';
 import { AttendanceSheet } from '@/components/attendance/AttendanceSheet';
+import { LoginStatusManager } from '@/components/admin/LoginStatusManager';
+import { GoogleSheetConnector } from '@/components/admin/GoogleSheetConnector';
 import {
   ShieldAlert,
   Users,
@@ -187,6 +189,12 @@ export default function AdminPage() {
 
       {/* 회원 승인 및 등급 관리 테이블 */}
       <MemberManager initialUsers={users} />
+
+      {/* 구글 시트 [회원 로그인 현황] 실시간 모니터링 테이블 */}
+      <LoginStatusManager />
+
+      {/* 구글 스프레드시트 연동 및 Apps Script 관리자 도구 */}
+      <GoogleSheetConnector />
     </div>
   );
 }
