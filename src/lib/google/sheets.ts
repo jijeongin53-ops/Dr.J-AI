@@ -802,13 +802,31 @@ export async function getLoginLogs(): Promise<MemberLoginLog[]> {
         const json = await res.json();
         const rows: any[][] = json.rows || [];
         if (rows.length > 1) {
-          const parsedLogs: MemberLoginLog[] = rows.slice(1).map((r, idx) => ({
-            id: `log_${idx + 1}`,
-            userName: String(r[0] || '').trim(),
-            loginAt: String(r[1] || '').trim(),
-            roomStatus: String(r[2] || '-').trim(),
-            downloadStatus: String(r[3] || '-').trim(),
-          })).filter((l) => l.userName && l.userName !== '회원명');
+          const parsedLogs: MemberLoginLog[] = rows.slice(1).map((r, idx) => {
+            let loginTime = String(r[1] || '').trim();
+            if (loginTime.includes('T')) {
+              try {
+                const d = new Date(loginTime);
+                if (!isNaN(d.getTime())) {
+                  const kst = new Date(d.getTime() + 9 * 3600000);
+                  const y = kst.getUTCFullYear();
+                  const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
+                  const day = String(kst.getUTCDate()).padStart(2, '0');
+                  const hh = String(kst.getUTCHours()).padStart(2, '0');
+                  const mm = String(kst.getUTCMinutes()).padStart(2, '0');
+                  const ss = String(kst.getUTCSeconds()).padStart(2, '0');
+                  loginTime = `${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+                }
+              } catch (_) {}
+            }
+            return {
+              id: `log_${idx + 1}`,
+              userName: String(r[0] || '').trim(),
+              loginAt: loginTime,
+              roomStatus: String(r[2] || '-').trim(),
+              downloadStatus: String(r[3] || '-').trim(),
+            };
+          }).filter((l) => l.userName && l.userName !== '회원명');
 
           if (parsedLogs.length > 0) {
             inMemoryLoginLogs = parsedLogs;
