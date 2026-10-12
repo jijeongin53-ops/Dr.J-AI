@@ -188,7 +188,7 @@ export function NetflixIntro() {
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
         {/* 중앙 붉은/오렌지 빛 폭발 (Radial Flare) */}
         <div
-          className={`absolute w-[600px] h-[600px] rounded-full bg-gradient-to-r from-orange-600/40 via-red-600/20 to-transparent blur-3xl transition-transform duration-1000 ${
+          className={`absolute w-[600px] h-[600px] rounded-full bg-gradient-to-r from-blue-600/40 via-sky-600/20 to-transparent blur-3xl transition-transform duration-1000 ${
             stage === 'reveal' || stage === 'expand'
               ? 'scale-150 opacity-90'
               : 'scale-50 opacity-20'
@@ -208,10 +208,10 @@ export function NetflixIntro() {
               style={{
                 background:
                   i === 0
-                    ? 'linear-gradient(180deg, transparent, #FF6F0F, #E50914, transparent)'
+                    ? 'linear-gradient(180deg, transparent, #4A85F6, #38BDF8, transparent)'
                     : Math.abs(i) % 2 === 0
-                    ? 'linear-gradient(180deg, transparent, #FF4500, transparent)'
-                    : 'linear-gradient(180deg, transparent, #E50914, transparent)',
+                    ? 'linear-gradient(180deg, transparent, #60A5FA, transparent)'
+                    : 'linear-gradient(180deg, transparent, #38BDF8, transparent)',
                 transform:
                   stage === 'expand'
                     ? `scaleY(1.3) translateY(${i * 12}px) rotate(${i * 2}deg)`
@@ -228,7 +228,7 @@ export function NetflixIntro() {
       <div className="relative z-10 flex flex-col items-center justify-center text-center px-4">
         {/* 심볼 아이콘 뱃지 */}
         <div
-          className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-orange-500 via-carrot to-red-600 p-0.5 shadow-[0_0_80px_rgba(255,111,15,0.8)] flex items-center justify-center transition-all duration-700 transform ${
+          className={`w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-gradient-to-br from-blue-500 via-sky-400 to-indigo-600 p-0.5 shadow-[0_0_80px_rgba(74,133,246,0.8)] flex items-center justify-center transition-all duration-700 transform ${
             stage === 'boom'
               ? 'scale-50 opacity-40 rotate-[-12deg]'
               : stage === 'reveal'
@@ -239,7 +239,7 @@ export function NetflixIntro() {
           }`}
         >
           <div className="w-full h-full bg-black/90 rounded-[22px] flex items-center justify-center border border-white/20 backdrop-blur-xl">
-            <span className="text-3xl sm:text-4xl font-black bg-gradient-to-br from-orange-400 via-yellow-200 to-white bg-clip-text text-transparent tracking-tighter drop-shadow-[0_0_20px_rgba(255,111,15,0.9)]">
+            <span className="text-3xl sm:text-4xl font-black bg-gradient-to-br from-sky-300 via-blue-100 to-white bg-clip-text text-transparent tracking-tighter drop-shadow-[0_0_20px_rgba(74,133,246,0.9)]">
               Dr. J
             </span>
           </div>
@@ -254,10 +254,10 @@ export function NetflixIntro() {
           }`}
           style={{
             letterSpacing: stage === 'expand' ? '0.35em' : '0.15em',
-            textShadow: '0 0 40px rgba(255, 111, 15, 0.9), 0 0 80px rgba(229, 9, 20, 0.6)',
+            textShadow: '0 0 40px rgba(74, 133, 246, 0.9), 0 0 80px rgba(56, 189, 248, 0.6)',
           }}
         >
-          <span className="bg-gradient-to-r from-orange-500 via-red-500 to-amber-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-blue-400 via-sky-400 to-indigo-300 bg-clip-text text-transparent">
             DR. J&apos;S
           </span>
         </h1>

@@ -104,7 +104,7 @@ export function LectureReviewSection({
         </div>
 
         {/* 평점 배지 */}
-        <div className="flex items-center gap-3 bg-orange-50/70 border border-orange-200/80 px-4 py-2.5 rounded-2xl self-start sm:self-auto shadow-sm">
+        <div className="flex items-center gap-3 bg-blue-50/70 border border-blue-200/80 px-4 py-2.5 rounded-2xl self-start sm:self-auto shadow-sm">
           <div className="flex items-center gap-1">
             {[1, 2, 3, 4, 5].map((star) => (
               <Star
@@ -182,7 +182,7 @@ export function LectureReviewSection({
             <button
               type="submit"
               disabled={submitting || !content.trim()}
-              className="px-4 py-2 bg-carrot hover:bg-orange-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm disabled:opacity-40"
+              className="px-4 py-2 bg-carrot hover:bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition shadow-sm disabled:opacity-40"
             >
               <MessageSquarePlus className="w-3.5 h-3.5" />
               <span>{submitting ? '등록 중...' : '후기 등록하기'}</span>

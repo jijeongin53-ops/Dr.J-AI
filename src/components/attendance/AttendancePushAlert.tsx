@@ -108,11 +108,11 @@ export function AttendancePushAlert() {
         >
           <div className="bg-white border-2 border-carrot rounded-2xl shadow-2xl p-5 text-gray-900 relative overflow-hidden backdrop-blur-xl">
             {/* 상단 장식 바 */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-carrot via-orange-400 to-black" />
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-carrot via-blue-400 to-black" />
 
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center text-carrot shrink-0 animate-pulse">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center text-carrot shrink-0 animate-pulse">
                   <Bell className="w-5 h-5 text-carrot" />
                 </div>
                 <div>
@@ -160,7 +160,7 @@ export function AttendancePushAlert() {
                     type="button"
                     onClick={handleCheckIn}
                     disabled={loading}
-                    className="w-full py-2.5 px-4 bg-carrot hover:bg-orange-600 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-2.5 px-4 bg-carrot hover:bg-blue-600 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {loading ? (
                       <>
@@ -186,7 +186,7 @@ export function AttendancePushAlert() {
         <button
           type="button"
           onClick={() => setDismissed(false)}
-          className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-full bg-carrot text-white font-bold text-xs shadow-xl flex items-center gap-2 hover:bg-orange-600 transition animate-bounce"
+          className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-full bg-carrot text-white font-bold text-xs shadow-xl flex items-center gap-2 hover:bg-blue-600 transition animate-bounce"
         >
           <Bell className="w-4 h-4" />
           <span>출석 체크 요청 열기</span>

@@ -133,7 +133,7 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
               return (
                 <div
                   key={msg.id}
-                  className="p-4 rounded-2xl bg-orange-50/60 border border-orange-200 text-xs space-y-1.5 my-3 shadow-sm"
+                  className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 text-xs space-y-1.5 my-3 shadow-sm"
                 >
                   <div className="flex items-center gap-1.5 text-carrot font-bold">
                     <Pin className="w-3.5 h-3.5" />

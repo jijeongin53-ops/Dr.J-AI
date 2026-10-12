@@ -193,7 +193,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-carrot">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-carrot">
               <CalendarCheck2 className="w-5 h-5" />
             </div>
             <div>
@@ -244,7 +244,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
         {isAdmin ? (
           <div className="pt-1">
             {activeSession ? (
-              <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-2.5 h-2.5 rounded-full bg-carrot animate-ping" />
                   <div>
@@ -278,7 +278,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
                 <button
                   onClick={handleStartSession}
                   disabled={actionLoading}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-carrot hover:bg-orange-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-sm shrink-0"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-carrot hover:bg-blue-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-sm shrink-0"
                 >
                   {actionLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -313,7 +313,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
                   <button
                     onClick={handleSelfCheckIn}
                     disabled={actionLoading}
-                    className="px-5 py-2.5 bg-carrot hover:bg-orange-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md"
+                    className="px-5 py-2.5 bg-carrot hover:bg-blue-600 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>✋ 지금 출석 체크하기</span>

@@ -71,8 +71,8 @@ export function MemberStatusModal({ isOpen, onClose }: MemberStatusModalProps) {
             <span className="text-[11px] text-amber-700 block">승인 대기</span>
             <span className="text-lg font-bold text-amber-800">{pendingCount}명</span>
           </div>
-          <div className="p-3 rounded-xl bg-orange-50 border border-orange-100 text-center">
-            <span className="text-[11px] text-orange-700 block">VIP 회원</span>
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-center">
+            <span className="text-[11px] text-blue-700 block">VIP 회원</span>
             <span className="text-lg font-bold text-carrot">{vipCount}명</span>
           </div>
         </div>

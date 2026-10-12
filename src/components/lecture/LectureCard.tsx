@@ -80,7 +80,7 @@ export function LectureCard({ lecture, userRole, onUpdated, onDeleted }: Lecture
                 <button
                   type="button"
                   onClick={handleEditClick}
-                  className="p-1 text-gray-400 hover:text-carrot hover:bg-orange-50 rounded transition"
+                  className="p-1 text-gray-400 hover:text-carrot hover:bg-blue-50 rounded transition"
                   title="강의 수정"
                 >
                   <Edit2 className="w-3.5 h-3.5" />

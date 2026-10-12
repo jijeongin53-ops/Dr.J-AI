@@ -16,7 +16,7 @@ export function RoleGuideSection() {
         className="w-full flex items-center justify-between text-left group"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center text-carrot">
+          <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-carrot">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div>
@@ -88,14 +88,14 @@ export function RoleGuideSection() {
           </div>
 
           {/* VIP 회원 */}
-          <div className="p-5 rounded-xl border border-orange-200 bg-orange-50/30 space-y-3 shadow-sm relative overflow-hidden">
+          <div className="p-5 rounded-xl border border-blue-200 bg-blue-50/30 space-y-3 shadow-sm relative overflow-hidden">
             <div className="flex items-center justify-between">
               <RoleBadge role="vip" size="md" />
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-carrot border border-orange-200">
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-carrot border border-blue-200">
                 관리자 승인으로 가능
               </span>
             </div>
-            <div className="p-2 rounded-lg bg-orange-100/60 border border-orange-200 text-[11px] text-orange-900 font-semibold">
+            <div className="p-2 rounded-lg bg-blue-100/60 border border-blue-200 text-[11px] text-blue-900 font-semibold">
               📌 VIP 회원 기준: 관리자의 승인으로 가능합니다.
             </div>
             <ul className="space-y-2 text-xs text-gray-800">

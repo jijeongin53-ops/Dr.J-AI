@@ -99,7 +99,7 @@ export function MaterialList({ materials, userRole }: MaterialListProps) {
             >
               {/* 파일 메타 정보 */}
               <div className="flex items-start gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 text-carrot">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0 text-carrot">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">

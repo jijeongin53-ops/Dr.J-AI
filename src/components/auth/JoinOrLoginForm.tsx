@@ -238,7 +238,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 animate-fadeIn">
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
+          <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
             <Sparkles className="w-7 h-7" />
           </div>
           <div>
@@ -282,7 +282,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
           {/* 모임장/운영자 관리자 센터 버튼 */}
           <Link
             href="/admin"
-            className="flex-1 md:flex-none px-4 py-2.5 bg-carrot hover:bg-orange-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+            className="flex-1 md:flex-none px-4 py-2.5 bg-carrot hover:bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
           >
             <ShieldAlert className="w-4 h-4" />
             <span>관리자 센터</span>
@@ -425,7 +425,7 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
             </div>
           ) : (
             /* [요구사항 5 & 6 해결]: 정회원 및 VIP 회원 기준 명확한 안내 */
-            <div className="p-3.5 bg-orange-50/80 border border-orange-200 rounded-xl text-xs space-y-1">
+            <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs space-y-1">
               <p className="font-bold text-gray-900 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-carrot" />
                 <span>회원 가입 자격 및 등급 안내</span>

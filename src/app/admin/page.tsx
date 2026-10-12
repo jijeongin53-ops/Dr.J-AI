@@ -111,7 +111,7 @@ export default function AdminPage() {
           <button
             onClick={handleSyncVideoSheet}
             disabled={syncingVideo}
-            className="px-4 py-2 rounded-xl border border-carrot/30 bg-orange-50 hover:bg-orange-100 text-carrot text-xs font-bold flex items-center gap-1.5 transition shadow-sm disabled:opacity-50"
+            className="px-4 py-2 rounded-xl border border-carrot/30 bg-blue-50 hover:bg-blue-100 text-carrot text-xs font-bold flex items-center gap-1.5 transition shadow-sm disabled:opacity-50"
             title="구글 스프레드시트에 '동영상 업로드 현황' 시트를 자동 생성하고 최신 강의를 기록합니다."
           >
             {syncingVideo ? (

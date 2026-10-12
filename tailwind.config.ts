@@ -19,12 +19,12 @@ const config: Config = {
           border: "#27272a",
           muted: "#71717a",
         },
-        // 유채색 2가지 (당근 오렌지 + 승인/상태 그린)
+        // 유채색 2가지 (블루 파스텔 + 승인/상태 그린)
         carrot: {
-          DEFAULT: "#FF6F0F",
-          hover: "#E85C00",
-          light: "#FFF2EA",
-          dark: "#C64D00",
+          DEFAULT: "#4A85F6",
+          hover: "#3872E0",
+          light: "#F0F6FF",
+          dark: "#2563EB",
         },
         status: {
           green: "#10B981",

@@ -63,7 +63,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new Event('replayNetflixIntro'))}
-              className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-carrot px-2 py-0.5 rounded-full hover:bg-orange-50 transition border border-gray-200/60 hover:border-orange-200"
+              className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-carrot px-2 py-0.5 rounded-full hover:bg-blue-50 transition border border-gray-200/60 hover:border-blue-200"
               title="Dr. J 넷플릭스 인트로 효과음 다시 보기"
             >
               <Sparkles className="w-3 h-3 text-carrot" />
@@ -125,7 +125,7 @@ export function Navbar() {
             {/* Dr. J에게 물어봐! 헤더 버튼 */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('openAskDrJ'))}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-900 text-xs font-bold transition shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold transition shadow-sm"
               title="모임장 Dr. J에게 질문하기 (구글 시트 저장 및 이메일 발송)"
             >
               <MessageCircleQuestion className="w-4 h-4 text-carrot" />
@@ -199,7 +199,7 @@ export function Navbar() {
                     <Link
                       href="/admin"
                       onClick={() => setSwitcherOpen(false)}
-                      className="w-full px-3 py-2 rounded-lg bg-orange-50 hover:bg-orange-100 text-carrot font-bold flex items-center gap-2 transition"
+                      className="w-full px-3 py-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-carrot font-bold flex items-center gap-2 transition"
                     >
                       <ShieldAlert className="w-4 h-4" />
                       <span>모임장 관리자 센터 열기</span>

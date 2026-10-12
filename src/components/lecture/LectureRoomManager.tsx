@@ -422,7 +422,7 @@ export function LectureRoomManager({
       {/* 1. 상단 상태 요약 바 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
             <Users className="w-5 h-5" />
           </div>
           <div>
@@ -485,7 +485,7 @@ export function LectureRoomManager({
             <button
               onClick={handleEnter}
               disabled={actionLoading}
-              className="px-3.5 py-1.5 rounded-xl bg-carrot hover:bg-orange-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+              className="px-3.5 py-1.5 rounded-xl bg-carrot hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>강의실 입장하기</span>
@@ -516,7 +516,7 @@ export function LectureRoomManager({
 
       {/* 4. 강의 시작 시간 입력/수정 폼 (관리자 전용) */}
       {isAdmin && isUpdatingStartTime && (
-        <div className="p-3 bg-orange-50/70 rounded-xl border border-orange-200 flex flex-wrap items-center gap-3 animate-fadeIn text-xs">
+        <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200 flex flex-wrap items-center gap-3 animate-fadeIn text-xs">
           <span className="font-bold text-gray-800 flex items-center gap-1">
             <Clock className="w-4 h-4 text-carrot" />
             강의 시작 시간 입력:
@@ -525,13 +525,13 @@ export function LectureRoomManager({
             type="text"
             value={startTimeInput}
             onChange={(e) => setStartTimeInput(e.target.value)}
-            className="w-44 px-3 py-1.5 border border-orange-300 rounded-lg bg-white text-gray-900 font-medium placeholder-gray-400"
+            className="w-44 px-3 py-1.5 border border-blue-300 rounded-lg bg-white text-gray-900 font-medium placeholder-gray-400"
             placeholder="예: 19:30 or 2026-10-12 19:30"
           />
           <button
             onClick={handleUpdateStartTime}
             disabled={actionLoading}
-            className="px-3 py-1.5 bg-carrot text-white font-bold rounded-lg hover:bg-orange-600 transition"
+            className="px-3 py-1.5 bg-carrot text-white font-bold rounded-lg hover:bg-blue-600 transition"
           >
             저장
           </button>
@@ -623,7 +623,7 @@ export function LectureRoomManager({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setShowAdminCodeModal(true)}
-                    className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+                    className="px-3.5 py-2 rounded-xl bg-carrot hover:bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
                   >
                     <KeyRound className="w-3.5 h-3.5" />
                     <span>출석 번호 확인 ({adminGeneratedCode || roomAttendance.code})</span>
@@ -640,7 +640,7 @@ export function LectureRoomManager({
                 <button
                   onClick={handleStartAttendance}
                   disabled={actionLoading}
-                  className="px-4 py-2 rounded-xl bg-carrot hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
+                  className="px-4 py-2 rounded-xl bg-carrot hover:bg-blue-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition"
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>실시간 출석 체크 시작 (4자리 랜덤)</span>
@@ -756,7 +756,7 @@ export function LectureRoomManager({
       {showAdminCodeModal && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-gray-200 text-center space-y-5 relative overflow-hidden">
-            <div className="w-14 h-14 rounded-2xl bg-orange-100 border border-orange-200 flex items-center justify-center mx-auto text-carrot shadow-sm">
+            <div className="w-14 h-14 rounded-2xl bg-blue-100 border border-blue-200 flex items-center justify-center mx-auto text-carrot shadow-sm">
               <KeyRound className="w-7 h-7" />
             </div>
 
@@ -773,7 +773,7 @@ export function LectureRoomManager({
             </div>
 
             {/* 4자리 큰 글씨 디스플레이 */}
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100/60 border-2 border-orange-300 rounded-2xl py-5 px-6 shadow-inner">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100/60 border-2 border-blue-300 rounded-2xl py-5 px-6 shadow-inner">
               <div className="text-4xl sm:text-5xl font-black text-carrot tracking-[0.3em] font-mono select-all text-center pl-[0.3em]">
                 {adminGeneratedCode || roomAttendance?.code || '----'}
               </div>

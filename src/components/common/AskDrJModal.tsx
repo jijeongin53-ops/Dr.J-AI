@@ -96,7 +96,7 @@ export function AskDrJModal() {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="group relative flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-orange-500 via-carrot to-amber-500 hover:from-orange-600 hover:to-carrot text-white font-bold text-xs sm:text-sm rounded-full shadow-lg hover:shadow-orange-500/30 hover:scale-105 active:scale-95 transition-all duration-300"
+          className="group relative flex items-center gap-2.5 px-4 py-3 bg-gradient-to-r from-blue-500 via-carrot to-indigo-500 hover:from-blue-600 hover:to-carrot text-white font-bold text-xs sm:text-sm rounded-full shadow-lg hover:shadow-blue-500/30 hover:scale-105 active:scale-95 transition-all duration-300"
           title="Dr. J에게 질문하기 (구글 시트 저장 및 이메일 발송)"
         >
           <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
@@ -104,8 +104,8 @@ export function AskDrJModal() {
           </div>
           <span>Dr. J에게 물어봐!</span>
           <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-200 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-300" />
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-200 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-300" />
           </span>
         </button>
       </div>
@@ -115,7 +115,7 @@ export function AskDrJModal() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-lg w-full overflow-hidden animate-scaleUp">
             {/* 모달 헤더 */}
-            <div className="bg-gradient-to-r from-orange-500 to-carrot p-5 text-white flex items-center justify-between">
+            <div className="bg-gradient-to-r from-blue-600 to-carrot p-5 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-white" />
@@ -124,7 +124,7 @@ export function AskDrJModal() {
                   <h3 className="font-extrabold text-base tracking-tight">
                     Dr. J에게 물어봐!
                   </h3>
-                  <p className="text-[11px] text-orange-100 mt-0.5">
+                  <p className="text-[11px] text-blue-100 mt-0.5">
                     궁금한 실무 AI 질문, 프롬프트 고민, 모임 건의사항을 남겨주세요.
                   </p>
                 </div>
@@ -153,12 +153,12 @@ export function AskDrJModal() {
                   </p>
                 </div>
 
-                <div className="p-4 bg-orange-50/70 rounded-2xl border border-orange-200/80 space-y-2.5">
-                  <div className="flex items-center gap-2 text-xs font-bold text-orange-950">
+                <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-2.5">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-950">
                     <Mail className="w-4 h-4 text-carrot" />
                     <span>모임장에게 직접 메일 앱으로 사본 발송하기</span>
                   </div>
-                  <p className="text-[11px] text-orange-900 leading-relaxed">
+                  <p className="text-[11px] text-blue-900 leading-relaxed">
                     회원님의 메일함(다음/한메일, 네이버, 아웃룩, 스마트폰 기본 메일)에서 모임장에게 1:1로 직접 메일을 보내시려면 아래 버튼을 눌러주세요.
                   </p>
                   <a
@@ -189,7 +189,7 @@ export function AskDrJModal() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div className="p-3 bg-orange-50 rounded-xl border border-orange-200 text-xs text-orange-950 flex items-center gap-2">
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-200 text-xs text-blue-950 flex items-center gap-2">
                   <Mail className="w-4 h-4 text-carrot shrink-0" />
                   <span>
                     질문이 남겨지면 <strong>구글 시트에 자동 저장</strong>되며 모임장 메일(<strong>jguy12@hanmail.net</strong>)로 즉시 발송됩니다.
@@ -298,7 +298,7 @@ export function AskDrJModal() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-5 py-2.5 bg-carrot hover:bg-orange-600 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                    className="px-5 py-2.5 bg-carrot hover:bg-blue-600 text-white text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>{loading ? '질문 발송 중...' : '질문 남기기'}</span>
