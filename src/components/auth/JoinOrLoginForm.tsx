@@ -16,6 +16,7 @@ import {
   BookOpen,
   MessageSquare,
   ShieldAlert,
+  CalendarCheck2,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -291,15 +292,20 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
 
   // [중요 요구사항 1 해결]: 로그인을 완료했을 때는 로그인 입력 폼이 완전히 사라지고, 깔끔한 회원 카드만 표시됩니다!
   if (currentUser) {
+    const isAdmin =
+      currentUser.role === 'admin' ||
+      currentUser.name === '지정인' ||
+      currentUser.phoneNumber?.includes('82030046');
+
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 animate-fadeIn">
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-7 shadow-sm flex flex-col md:flex-row items-center justify-between gap-5 animate-fadeIn">
         <div className="flex items-center gap-4 w-full md:w-auto">
-          <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
-            <Sparkles className="w-7 h-7" />
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-carrot shrink-0 shadow-sm">
+            <Sparkles className="w-6 h-6 sm:w-7 sm:h-7" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xl font-bold text-gray-900">
+              <span className="text-lg sm:text-xl font-bold text-gray-900">
                 {currentUser.name} 회원님
               </span>
               <RoleBadge role={currentUser.role} size="md" />
@@ -313,43 +319,63 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-1.5">
+            <p className="text-xs text-gray-500 mt-1">
               아이디: <strong className="text-gray-700">{currentUser.name}</strong> | 연락처: <span className="text-gray-700">{currentUser.phoneNumber}</span> | 직업: <span className="text-gray-700">{currentUser.job || '회원'}</span>
             </p>
           </div>
         </div>
 
-        {/* 바로가기 액션 버튼 */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
-          <Link
-            href="/lectures"
-            className="flex-1 md:flex-none px-4 py-2.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>강의 및 자료실</span>
-          </Link>
-          <Link
-            href="/chat"
-            className="flex-1 md:flex-none px-4 py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-800 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition"
-          >
-            <MessageSquare className="w-4 h-4 text-carrot" />
-            <span>채팅방</span>
-          </Link>
-          {/* 모임장/운영자 관리자 센터 버튼 */}
-          <Link
-            href="/admin"
-            className="flex-1 md:flex-none px-4 py-2.5 bg-carrot hover:bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
-          >
-            <ShieldAlert className="w-4 h-4" />
-            <span>관리자 센터</span>
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="p-2.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-400 hover:text-red-600 transition"
-            title="로그아웃"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+        {/* [요구사항 2 해결]: 비관리자 회원은 관리자 센터 미노출, 칸 크기와 높이가 일치하는 심플하고 균형잡힌 액션 메뉴 */}
+        <div className="w-full md:w-auto mt-1 md:mt-0">
+          <div className="flex items-center gap-2 w-full">
+            <div
+              className={`grid ${
+                isAdmin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'
+              } gap-2 flex-1 sm:flex-initial`}
+            >
+              <Link
+                href="/lectures"
+                className="h-10 px-3 sm:px-4 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm whitespace-nowrap"
+              >
+                <BookOpen className="w-4 h-4 shrink-0 text-blue-300" />
+                <span>강의·자료실</span>
+              </Link>
+              <Link
+                href="/chat"
+                className="h-10 px-3 sm:px-4 bg-blue-50/80 hover:bg-blue-100 border border-blue-200 text-carrot text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition whitespace-nowrap"
+              >
+                <MessageSquare className="w-4 h-4 shrink-0" />
+                <span>승인 채팅방</span>
+              </Link>
+              <Link
+                href="/attendance"
+                className="h-10 px-3 sm:px-4 bg-white hover:bg-gray-50 border border-gray-200 text-gray-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition whitespace-nowrap shadow-xs"
+              >
+                <CalendarCheck2 className="w-4 h-4 shrink-0 text-carrot" />
+                <span>강의 출석부</span>
+              </Link>
+
+              {/* 관리자 전용 관리자 센터 버튼 */}
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="h-10 px-3 sm:px-4 bg-carrot hover:bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm whitespace-nowrap"
+                >
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  <span>관리자 센터</span>
+                </Link>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="h-10 w-10 rounded-xl border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-400 hover:text-red-600 transition flex items-center justify-center shrink-0"
+              title="로그아웃"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     );

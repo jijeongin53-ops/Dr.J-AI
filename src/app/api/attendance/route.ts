@@ -8,13 +8,15 @@ import {
   manualUpdateAttendance,
   getSessionAttendanceRoster,
 } from '@/lib/attendance';
-import { getUsers } from '@/lib/google/sheets';
+import { getUsers, getLectures } from '@/lib/google/sheets';
+import { getMemberRoomStatus, getOrCreateRoom } from '@/lib/lectureRoom';
 
 // 출석 세션 및 명부 조회
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get('mode');
   const sessionId = searchParams.get('sessionId');
+  const userId = searchParams.get('userId');
   const userPhone = searchParams.get('userPhone');
 
   // 1. 회원 앱에서 현재 활성화된 출석 요청이 있는지 확인 (푸시 배너용)
@@ -32,9 +34,45 @@ export async function GET(request: Request) {
   const targetSessionId = sessionId || (active?.id ?? 'default');
   const rosterData = getSessionAttendanceRoster(targetSessionId, users);
 
+  // 3. [요구사항 1]: 사용자가 입장한 강의실의 출석 현황 목록 생성 (그리드 형태 렌더링용)
+  const lectures = await getLectures();
+  const cleanPhone = (userPhone || '').replace(/\D/g, '');
+  const myRooms = lectures.map((lecture) => {
+    const roomStatus = getMemberRoomStatus(lecture.id, userId || undefined, userPhone || undefined, false);
+    const room = getOrCreateRoom(lecture.id);
+    const checkedInUser = room.attendance?.checkedInUsers.find((u) => {
+      if (userId && u.userId === userId) return true;
+      if (cleanPhone) {
+        const uPhoneClean = (u.phoneNumber || '').replace(/\D/g, '');
+        if (uPhoneClean === cleanPhone || (cleanPhone.length >= 4 && uPhoneClean.endsWith(cleanPhone.slice(-4)))) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    return {
+      lectureId: lecture.id,
+      title: lecture.title,
+      category: lecture.category,
+      thumbnailUrl: lecture.thumbnailUrl,
+      startTime: roomStatus.startTime || lecture.startTime,
+      isEntered: roomStatus.myStatus === 'entered',
+      isWaiting: roomStatus.myStatus === 'waiting',
+      queuePosition: roomStatus.queuePosition,
+      activeCount: roomStatus.activeCount,
+      maxAttendees: roomStatus.maxAttendees,
+      hasCheckedIn: !!checkedInUser,
+      checkedAt: checkedInUser?.checkedAt,
+      attendanceActive: !!roomStatus.attendance?.isActive,
+      attendanceTitle: roomStatus.attendance?.title,
+    };
+  });
+
   return NextResponse.json({
     ...rosterData,
     activeSession: active,
+    myRooms,
   });
 }
 
