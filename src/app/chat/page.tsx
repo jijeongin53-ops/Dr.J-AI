@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { MemberUser } from '@/types';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, setCurrentUser as saveCurrentUser } from '@/lib/auth';
 import { LiveChatRoom } from '@/components/chat/LiveChatRoom';
 import { MessageSquare } from 'lucide-react';
 
@@ -10,8 +10,36 @@ export default function ChatPage() {
   const [currentUser, setCurrentUser] = useState<MemberUser | null>(null);
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) setCurrentUser(user);
+    const syncUser = async () => {
+      const user = getCurrentUser();
+      setCurrentUser(user);
+
+      // 최신 승인 상태 및 등급을 서버에서 동기화
+      if (user) {
+        try {
+          const res = await fetch('/api/auth', { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            const found = (data.members || []).find(
+              (m: MemberUser) => m.id === user.id || m.name === user.name
+            );
+            if (found && (found.status !== user.status || found.role !== user.role)) {
+              const updated = { ...user, status: found.status, role: found.role };
+              saveCurrentUser(updated);
+              setCurrentUser(updated);
+            }
+          }
+        } catch (_) {}
+      }
+    };
+
+    syncUser();
+    window.addEventListener('storage', syncUser);
+    window.addEventListener('authChange', syncUser);
+    return () => {
+      window.removeEventListener('storage', syncUser);
+      window.removeEventListener('authChange', syncUser);
+    };
   }, []);
 
   return (

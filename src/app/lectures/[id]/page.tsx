@@ -57,7 +57,7 @@ export default function LectureDetailPage() {
       .finally(() => setLoading(false));
 
     // 댓글 조회
-    fetch(`/api/comments?lectureId=${lectureId}`)
+    fetch(`/api/comments?lectureId=${lectureId}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (data.comments) setComments(data.comments);

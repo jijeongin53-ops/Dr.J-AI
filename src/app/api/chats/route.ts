@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getChats, addChat } from '@/lib/google/sheets';
 import { ChatMessage } from '@/types';
+import { getKoreanNowString } from '@/lib/formatters';
+
+export const dynamic = 'force-dynamic';
 
 // 채팅 메시지 목록 조회
 export async function GET() {
@@ -25,10 +28,7 @@ export async function POST(request: Request) {
       authorRole: authorRole || 'regular',
       carrotNickname: carrotNickname || '당근회원',
       content,
-      createdAt: new Date().toLocaleTimeString('ko-KR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      createdAt: getKoreanNowString().slice(0, 16),
       isNotice: Boolean(isNotice && authorRole === 'admin'),
       isApproved: true,
     };

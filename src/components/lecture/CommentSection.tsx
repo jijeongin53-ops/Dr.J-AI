@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Comment, MemberUser } from '@/types';
 import { RoleBadge } from '../common/RoleBadge';
 import { MessageSquare, Send } from 'lucide-react';
@@ -19,6 +19,50 @@ export function CommentSection({
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 부모에서 전달된 초기 댓글 동기화
+  useEffect(() => {
+    if (initialComments && initialComments.length > 0) {
+      setComments((prev) => {
+        const merged = new Map<string, Comment>();
+        initialComments.forEach((c) => merged.set(c.id, c));
+        prev.forEach((c) => {
+          if (!merged.has(c.id)) merged.set(c.id, c);
+        });
+        return Array.from(merged.values());
+      });
+    }
+  }, [initialComments]);
+
+  // 서버(구글 시트 연동)에서 최신 댓글 목록 주기적 동기화
+  useEffect(() => {
+    const fetchLatestComments = async () => {
+      try {
+        const res = await fetch(`/api/comments?lectureId=${encodeURIComponent(lectureId)}`, {
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.comments)) {
+            setComments((prev) => {
+              const merged = new Map<string, Comment>();
+              data.comments.forEach((c: Comment) => merged.set(c.id, c));
+              prev.forEach((c) => {
+                if (!merged.has(c.id)) merged.set(c.id, c);
+              });
+              return Array.from(merged.values());
+            });
+          }
+        }
+      } catch (e) {
+        console.error('댓글 목록 불러오기 실패:', e);
+      }
+    };
+
+    fetchLatestComments();
+    const interval = setInterval(fetchLatestComments, 5000);
+    return () => clearInterval(interval);
+  }, [lectureId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +85,10 @@ export function CommentSection({
 
       if (res.ok) {
         const data = await res.json();
-        setComments([...comments, data.comment]);
+        setComments((prev) => {
+          if (prev.some((c) => c.id === data.comment.id)) return prev;
+          return [...prev, data.comment];
+        });
         setContent('');
       }
     } catch (e) {

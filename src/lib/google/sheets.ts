@@ -413,14 +413,95 @@ export async function addDrJQuestion(question: DrJQuestion): Promise<DrJQuestion
   return question;
 }
 
+// 구글 시트 실시간 브릿지 저장소 헬퍼 (서버리스 인스턴스 간 댓글/후기/채팅/강의 영구 공유)
+async function saveRecordToSheetStore(
+  tag: '__COMMENT__' | '__REVIEW__' | '__CHAT__' | '__LECTURE__' | '__LECTURE_DELETE__',
+  subKey: string,
+  userName: string,
+  payloadObj: any,
+  contentText: string
+): Promise<void> {
+  const gasUrl = getRuntimeGasUrl();
+  if (!gasUrl) return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    await fetch(gasUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        action: 'askDrJ',
+        data: {
+          createdAt: getKoreanNowString(),
+          userName: userName || '회원',
+          phoneNumber: subKey || '-',
+          email: tag,
+          title: JSON.stringify(payloadObj),
+          content: contentText || '-',
+        },
+      }),
+    });
+    clearTimeout(timer);
+  } catch (e: any) {
+    console.warn(`[Google Sheets Store] ${tag} 저장 실패:`, e.message);
+  }
+}
+
+async function fetchAllSheetStoreRows(): Promise<Array<{ tag: string; subKey: string; jsonStr: string }>> {
+  try {
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('DrJ_질문함')}`;
+    const res = await fetch(gvizUrl, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const text = await res.text();
+    const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
+    if (!jsonMatch || !jsonMatch[1]) return [];
+    const parsed = JSON.parse(jsonMatch[1]);
+    const rows = parsed?.table?.rows || [];
+    const result: Array<{ tag: string; subKey: string; jsonStr: string }> = [];
+    for (const r of rows) {
+      const c = r.c || [];
+      const tag = String(c[3]?.v || '').trim();
+      const subKey = String(c[2]?.v || '').trim();
+      const jsonStr = String(c[4]?.v || '').trim();
+      if (tag.startsWith('__') && jsonStr) {
+        result.push({ tag, subKey, jsonStr });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 /**
  * 강의 후기 목록 조회
  */
 export async function getReviews(lectureId?: string): Promise<LectureReview[]> {
-  if (lectureId) {
-    return inMemoryReviews.filter((r) => r.lectureId === lectureId);
+  const storeRows = await fetchAllSheetStoreRows();
+  const map = new Map<string, LectureReview>();
+
+  for (const r of storeRows) {
+    if (r.tag === '__REVIEW__') {
+      try {
+        const rev = JSON.parse(r.jsonStr) as LectureReview;
+        if (rev && rev.id) map.set(rev.id, rev);
+      } catch (_) {}
+    }
   }
-  return inMemoryReviews;
+
+  for (const mem of inMemoryReviews) {
+    map.set(mem.id, mem);
+  }
+
+  // 최신순 정렬
+  const merged = Array.from(map.values()).reverse();
+  inMemoryReviews = merged;
+
+  if (lectureId) {
+    return merged.filter((r) => r.lectureId === lectureId);
+  }
+  return merged;
 }
 
 /**
@@ -428,6 +509,8 @@ export async function getReviews(lectureId?: string): Promise<LectureReview[]> {
  */
 export async function addReview(review: LectureReview): Promise<LectureReview> {
   inMemoryReviews.unshift(review);
+
+  await saveRecordToSheetStore('__REVIEW__', review.lectureId, review.authorName, review, review.content);
 
   const gasUrl = getRuntimeGasUrl();
   if (gasUrl) {
@@ -508,6 +591,26 @@ export async function getLectures(): Promise<Lecture[]> {
     console.warn('[Google Sheets] 동영상 업로드 현황 시트 조회 실패:', e.message);
   }
 
+  // 1-2. 브릿지 스토어에 기록된 신규/수정/삭제 강의 내역 반영
+  const storeRows = await fetchAllSheetStoreRows();
+  for (const r of storeRows) {
+    if (r.tag === '__LECTURE_DELETE__') {
+      deletedLectureIds.add(r.subKey);
+      try {
+        const parsed = JSON.parse(r.jsonStr);
+        if (parsed?.id) deletedLectureIds.add(parsed.id);
+      } catch (_) {}
+    } else if (r.tag === '__LECTURE__') {
+      try {
+        const lec = JSON.parse(r.jsonStr) as Lecture;
+        if (lec && lec.id && lec.title) {
+          deletedLectureIds.delete(lec.id);
+          sheetLectures.push(lec);
+        }
+      } catch (_) {}
+    }
+  }
+
   // 2. 메모리 데이터(inMemoryLectures / initialLectures)와 시트 데이터를 중복 없이 병합
   const mergedMap = new Map<string, Lecture>();
   const titleToId = new Map<string, string>();
@@ -531,15 +634,16 @@ export async function getLectures(): Promise<Lecture[]> {
     } else {
       const existing = mergedMap.get(matchId)!;
       mergedMap.set(matchId, {
-        ...sItem,
         ...existing,
-        description: existing.description || sItem.description || `${existing.title} 강의실입니다.`,
-        videoUrl: existing.videoUrl || sItem.videoUrl || '',
-        driveFileId: existing.driveFileId || sItem.driveFileId || existing.videoUrl || sItem.videoUrl || '',
+        ...sItem,
+        id: matchId,
+        description: sItem.description || existing.description || `${existing.title} 강의실입니다.`,
+        videoUrl: sItem.videoUrl || existing.videoUrl || '',
+        driveFileId: sItem.driveFileId || existing.driveFileId || sItem.videoUrl || existing.videoUrl || '',
         materials:
-          existing.materials && existing.materials.length > 0
-            ? existing.materials
-            : sItem.materials || [],
+          sItem.materials && sItem.materials.length > 0
+            ? sItem.materials
+            : existing.materials || [],
       });
     }
   }
@@ -566,6 +670,8 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
   } else {
     inMemoryLectures.unshift(lecture);
   }
+
+  await saveRecordToSheetStore('__LECTURE__', lecture.id, lecture.title, lecture, lecture.description);
 
   // 구글 스프레드시트 '동영상 업로드 현황' 시트에 행 추가 (논블로킹 및 타임아웃 방어)
   const gasUrl = getRuntimeGasUrl();
@@ -618,6 +724,8 @@ export async function updateLecture(updated: Lecture): Promise<Lecture | null> {
     inMemoryLectures.unshift(updated);
   }
 
+  await saveRecordToSheetStore('__LECTURE__', updated.id, updated.title, updated, updated.description);
+
   // 구글 스프레드시트 동기화 시도 (논블로킹)
   const gasUrl = getRuntimeGasUrl();
   if (gasUrl) {
@@ -651,6 +759,8 @@ export async function deleteLecture(id: string): Promise<boolean> {
   const beforeLen = inMemoryLectures.length;
   inMemoryLectures = inMemoryLectures.filter((l) => l.id !== id);
   const deleted = inMemoryLectures.length < beforeLen;
+
+  await saveRecordToSheetStore('__LECTURE_DELETE__', id, id, { id }, 'deleted');
 
   // 구글 스프레드시트 동기화 시도 (논블로킹)
   const gasUrl = getRuntimeGasUrl();
@@ -708,10 +818,31 @@ export async function syncLecturesToGoogleSheet(): Promise<{ success: boolean; m
  * 댓글 목록 조회
  */
 export async function getComments(lectureId?: string): Promise<Comment[]> {
-  if (lectureId) {
-    return inMemoryComments.filter((c) => c.lectureId === lectureId);
+  const storeRows = await fetchAllSheetStoreRows();
+  const map = new Map<string, Comment>();
+
+  for (const c of inMemoryComments) {
+    map.set(c.id, c);
   }
-  return inMemoryComments;
+
+  for (const r of storeRows) {
+    if (r.tag === '__COMMENT__') {
+      try {
+        const comm = JSON.parse(r.jsonStr) as Comment;
+        if (comm && comm.id) {
+          map.set(comm.id, comm);
+        }
+      } catch (_) {}
+    }
+  }
+
+  const merged = Array.from(map.values());
+  inMemoryComments = merged;
+
+  if (lectureId) {
+    return merged.filter((c) => c.lectureId === lectureId);
+  }
+  return merged;
 }
 
 /**
@@ -719,6 +850,7 @@ export async function getComments(lectureId?: string): Promise<Comment[]> {
  */
 export async function addComment(comment: Comment): Promise<Comment> {
   inMemoryComments.push(comment);
+  await saveRecordToSheetStore('__COMMENT__', comment.lectureId, comment.authorName, comment, comment.content);
   return comment;
 }
 
@@ -726,7 +858,34 @@ export async function addComment(comment: Comment): Promise<Comment> {
  * 실시간 승인 채팅 목록 조회
  */
 export async function getChats(): Promise<ChatMessage[]> {
-  return inMemoryChats;
+  const storeRows = await fetchAllSheetStoreRows();
+  const map = new Map<string, ChatMessage>();
+
+  // 기본 공지 메시지 우선 반영
+  for (const initChat of initialChats) {
+    map.set(initChat.id, initChat);
+  }
+
+  // 시트에 영구 저장된 대화 내역 반영
+  for (const r of storeRows) {
+    if (r.tag === '__CHAT__') {
+      try {
+        const chatObj = JSON.parse(r.jsonStr) as ChatMessage;
+        if (chatObj && chatObj.id && chatObj.content) {
+          map.set(chatObj.id, chatObj);
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 메모리 내 최신 대화 병합
+  for (const memChat of inMemoryChats) {
+    map.set(memChat.id, memChat);
+  }
+
+  const merged = Array.from(map.values());
+  inMemoryChats = merged;
+  return merged;
 }
 
 /**
@@ -734,6 +893,13 @@ export async function getChats(): Promise<ChatMessage[]> {
  */
 export async function addChat(chat: ChatMessage): Promise<ChatMessage> {
   inMemoryChats.push(chat);
+  await saveRecordToSheetStore(
+    '__CHAT__',
+    chat.isNotice ? 'notice' : 'chat',
+    chat.authorName,
+    chat,
+    chat.content
+  );
   return chat;
 }
 

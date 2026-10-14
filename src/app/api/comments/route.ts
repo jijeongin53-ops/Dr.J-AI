@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getComments, addComment } from '@/lib/google/sheets';
 import { Comment } from '@/types';
+import { getKoreanNowString } from '@/lib/formatters';
+
+export const dynamic = 'force-dynamic';
 
 // 댓글 조회
 export async function GET(request: Request) {
@@ -29,13 +32,7 @@ export async function POST(request: Request) {
       authorRole: authorRole || 'regular',
       carrotNickname: carrotNickname || '당근회원',
       content,
-      createdAt: new Date().toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      createdAt: getKoreanNowString().slice(0, 16),
     };
 
     const saved = await addComment(newComment);

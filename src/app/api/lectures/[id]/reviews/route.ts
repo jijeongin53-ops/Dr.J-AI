@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getReviews, addReview } from '@/lib/google/sheets';
 import { LectureReview } from '@/types';
+import { getKoreanNowString } from '@/lib/formatters';
+
+export const dynamic = 'force-dynamic';
 
 // 강의 후기 목록 조회
 export async function GET(
@@ -36,12 +39,7 @@ export async function POST(
       );
     }
 
-    const now = new Date();
-    const createdAt = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-      now.getDate()
-    ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(
-      now.getMinutes()
-    ).padStart(2, '0')}`;
+    const createdAt = getKoreanNowString().slice(0, 16);
 
     const newReview: LectureReview = {
       id: `rev-${Date.now()}`,

@@ -14,14 +14,31 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
   const [inputText, setInputText] = useState('');
   const [isNotice, setIsNotice] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
+
+  const isApproved =
+    currentUser?.status === 'approved' ||
+    currentUser?.role === 'admin' ||
+    currentUser?.name === '지정인';
 
   const fetchChats = async () => {
     try {
-      const res = await fetch('/api/chats');
+      const res = await fetch('/api/chats', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.chats || []);
+        if (Array.isArray(data.chats)) {
+          setMessages((prev) => {
+            const merged = new Map<string, ChatMessage>();
+            data.chats.forEach((m: ChatMessage) => merged.set(m.id, m));
+            prev.forEach((m) => {
+              if (!merged.has(m.id)) merged.set(m.id, m);
+            });
+            return Array.from(merged.values());
+          });
+        }
       }
     } catch (e) {
       console.error('채팅 불러오기 실패:', e);
@@ -38,18 +55,26 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // 새 메시지가 추가되었을 때만 채팅창 내부 스크롤을 하단으로 이동 (전체 브라우저 화면 스크롤 점프 방지)
+    if (messages.length > prevMessageCountRef.current) {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !currentUser) return;
+    if (!inputText.trim() || !currentUser || sending) return;
 
-    if (currentUser.status !== 'approved') {
+    if (!isApproved) {
       alert('관리자의 승인을 받은 회원만 채팅에 참여할 수 있습니다.');
       return;
     }
 
+    const textToSend = inputText.trim();
+    setSending(true);
     try {
       const res = await fetch('/api/chats', {
         method: 'POST',
@@ -59,26 +84,29 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
           authorName: currentUser.name,
           authorRole: currentUser.role,
           carrotNickname: currentUser.carrotNickname || currentUser.name,
-          content: inputText.trim(),
+          content: textToSend,
           isNotice: isNotice && currentUser.role === 'admin',
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setMessages((prev) => [...prev, data.chat]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.chat.id)) return prev;
+          return [...prev, data.chat];
+        });
         setInputText('');
         setIsNotice(false);
       }
     } catch (e) {
       console.error('메시지 전송 실패:', e);
+    } finally {
+      setSending(false);
     }
   };
 
-  const isApproved = currentUser?.status === 'approved';
-
   return (
-    <div className="flex flex-col h-[700px] max-w-4xl mx-auto rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+    <div className="flex flex-col h-[600px] max-w-4xl mx-auto rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
       {/* 채팅 헤더 */}
       <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -115,7 +143,7 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
       )}
 
       {/* 메시지 영역 */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-white">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-white">
         {loading ? (
           <div className="text-center py-20 text-xs text-gray-400">
             대화 목록을 불러오는 중...
@@ -126,7 +154,9 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
           </div>
         ) : (
           messages.map((msg) => {
-            const isMe = currentUser?.id === msg.authorId;
+            const isMe =
+              currentUser?.id === msg.authorId ||
+              Boolean(currentUser?.name && currentUser.name === msg.authorName);
 
             // 관리자 공지 메시지
             if (msg.isNotice) {

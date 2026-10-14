@@ -27,13 +27,24 @@ export function LectureReviewSection({
       const res = await fetch(`/api/lectures/${lectureId}/reviews`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setReviews(data.reviews || []);
+        if (Array.isArray(data.reviews)) {
+          setReviews((prev) => {
+            const merged = new Map<string, LectureReview>();
+            data.reviews.forEach((r: LectureReview) => merged.set(r.id, r));
+            prev.forEach((r) => {
+              if (!merged.has(r.id)) merged.set(r.id, r);
+            });
+            return Array.from(merged.values());
+          });
+        }
       }
     } catch (_) {}
   };
 
   useEffect(() => {
     fetchReviews();
+    const interval = setInterval(fetchReviews, 5000);
+    return () => clearInterval(interval);
   }, [lectureId]);
 
   // 후기 제출
