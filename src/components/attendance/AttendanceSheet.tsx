@@ -89,6 +89,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
       const params = new URLSearchParams();
       if (currentUser?.id) params.set('userId', currentUser.id);
       if (currentUser?.phoneNumber) params.set('userPhone', currentUser.phoneNumber);
+      if (currentUser?.name) params.set('userName', currentUser.name);
       const res = await fetch(`/api/attendance?${params.toString()}`, { cache: 'no-store' });
       const data = await res.json();
       setActiveSession(data.activeSession || null);
@@ -106,7 +107,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
     // 5초 간격으로 출석부 자동 갱신
     const interval = setInterval(fetchAttendance, 5000);
     return () => clearInterval(interval);
-  }, [currentUser?.id, currentUser?.phoneNumber]);
+  }, [currentUser?.id, currentUser?.phoneNumber, currentUser?.name]);
 
   // 관리자: 출석 체크 시작 (회원들에게 푸시 전송)
   const handleStartSession = async () => {
@@ -599,7 +600,7 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
                     {/* 카드 하단 액션: 강의실 바로가기 버튼 */}
                     <div className="mt-4 pt-3 border-t border-gray-100">
                       <Link
-                        href={`/lectures/${room.lectureId}/room`}
+                        href={`/lectures/${room.lectureId}`}
                         className={`w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition ${
                           room.isEntered
                             ? 'bg-gray-900 hover:bg-black text-white shadow-sm'

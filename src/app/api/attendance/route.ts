@@ -9,7 +9,9 @@ import {
   getSessionAttendanceRoster,
 } from '@/lib/attendance';
 import { getUsers, getLectures } from '@/lib/google/sheets';
-import { getMemberRoomStatus, getOrCreateRoom } from '@/lib/lectureRoom';
+import { getMemberRoomStatus, getOrCreateRoom, syncAllRoomsFromSheet } from '@/lib/lectureRoom';
+
+export const dynamic = 'force-dynamic';
 
 // 출석 세션 및 명부 조회
 export async function GET(request: Request) {
@@ -18,6 +20,7 @@ export async function GET(request: Request) {
   const sessionId = searchParams.get('sessionId');
   const userId = searchParams.get('userId');
   const userPhone = searchParams.get('userPhone');
+  const userName = searchParams.get('userName');
 
   // 1. 회원 앱에서 현재 활성화된 출석 요청이 있는지 확인 (푸시 배너용)
   if (mode === 'active') {
@@ -29,6 +32,7 @@ export async function GET(request: Request) {
   }
 
   // 2. 특정 세션의 전체 회원 출석 명부 조회 (관리자용)
+  await syncAllRoomsFromSheet();
   const active = await getActiveAttendanceSessionAsync();
   const users = await getUsers();
   const targetSessionId = sessionId || (active?.id ?? 'default');
@@ -38,10 +42,17 @@ export async function GET(request: Request) {
   const lectures = await getLectures();
   const cleanPhone = (userPhone || '').replace(/\D/g, '');
   const myRooms = lectures.map((lecture) => {
-    const roomStatus = getMemberRoomStatus(lecture.id, userId || undefined, userPhone || undefined, false);
+    const roomStatus = getMemberRoomStatus(
+      lecture.id,
+      userId || undefined,
+      userPhone || undefined,
+      false,
+      userName || undefined
+    );
     const room = getOrCreateRoom(lecture.id);
     const checkedInUser = room.attendance?.checkedInUsers.find((u) => {
       if (userId && u.userId === userId) return true;
+      if (userName && u.userName === userName) return true;
       if (cleanPhone) {
         const uPhoneClean = (u.phoneNumber || '').replace(/\D/g, '');
         if (uPhoneClean === cleanPhone || (cleanPhone.length >= 4 && uPhoneClean.endsWith(cleanPhone.slice(-4)))) {
@@ -84,7 +95,7 @@ export async function POST(request: Request) {
 
     // 1. 관리자: 출석 체크 세션 시작 (전체 회원 앱에 푸시 트리거)
     if (action === 'start') {
-      const session = startAttendanceSession(title || '실시간 AI 강의 출석 체크');
+      const session = await startAttendanceSession(title || '실시간 AI 강의 출석 체크');
       return NextResponse.json({
         success: true,
         session,
@@ -94,7 +105,7 @@ export async function POST(request: Request) {
 
     // 2. 관리자: 출석 체크 종료/마감
     if (action === 'stop') {
-      const stopped = stopAttendanceSession();
+      const stopped = await stopAttendanceSession();
       return NextResponse.json({
         success: stopped,
         message: '출석 체크가 마감되었습니다.',
@@ -110,14 +121,8 @@ export async function POST(request: Request) {
           { status: 401 }
         );
       }
-      const active = getActiveAttendanceSession();
-      const targetSessionId = sessionId || active?.id;
-      if (!targetSessionId) {
-        return NextResponse.json(
-          { error: '현재 진행 중인 출석 체크 세션이 없습니다.' },
-          { status: 400 }
-        );
-      }
+      const active = await getActiveAttendanceSessionAsync();
+      const targetSessionId = sessionId || active?.id || 'default';
 
       const result = await checkInMember(targetSessionId, user, lectureId);
       return NextResponse.json(result);
@@ -130,7 +135,7 @@ export async function POST(request: Request) {
       if (!targetUser) {
         return NextResponse.json({ error: '해당 회원을 찾을 수 없습니다.' }, { status: 404 });
       }
-      const record = manualUpdateAttendance(sessionId, targetUser, status || 'present');
+      const record = await manualUpdateAttendance(sessionId || 'default', targetUser, status || 'present');
       return NextResponse.json({ success: true, record });
     }
 

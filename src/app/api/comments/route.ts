@@ -20,17 +20,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { lectureId, authorId, authorName, authorRole, carrotNickname, content } = body;
 
-    if (!lectureId || !content || !authorId) {
+    if (!lectureId || !content) {
       return NextResponse.json({ error: '필수 필드가 누락되었습니다.' }, { status: 400 });
     }
 
     const newComment: Comment = {
       id: `comm-${Date.now()}`,
       lectureId,
-      authorId,
+      authorId: authorId || authorName || 'member',
       authorName: authorName || '익명 회원',
       authorRole: authorRole || 'regular',
-      carrotNickname: carrotNickname || '당근회원',
+      carrotNickname: carrotNickname || authorName || '당근회원',
       content,
       createdAt: getKoreanNowString().slice(0, 16),
     };

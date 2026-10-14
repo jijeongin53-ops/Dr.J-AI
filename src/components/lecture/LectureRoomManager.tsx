@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MemberUser, AttendanceSession } from '@/types';
 import { RoleBadge } from '../common/RoleBadge';
 import {
@@ -88,15 +88,21 @@ export function LectureRoomManager({
   const [actionLoading, setActionLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
+  // 입장/퇴장/출석 액션 중 이전 폴링 응답이 상태를 덮어쓰지 않도록 시퀀스 추적
+  const mutationSeqRef = useRef(0);
+  const autoEnteredUserKeyRef = useRef<string>('');
+
   const isAdmin = currentUser?.role === 'admin' || currentUser?.name === '지정인';
 
   // 1. 강의실 상태 실시간 조회 (3초 주기)
   const fetchRoomStatus = async () => {
+    const seqAtStart = mutationSeqRef.current;
     try {
       const queryParams = new URLSearchParams();
       if (currentUser) {
-        queryParams.set('userId', currentUser.id);
-        queryParams.set('userPhone', currentUser.phoneNumber);
+        if (currentUser.id) queryParams.set('userId', currentUser.id);
+        if (currentUser.phoneNumber) queryParams.set('userPhone', currentUser.phoneNumber);
+        if (currentUser.name) queryParams.set('userName', currentUser.name);
       }
       if (isAdmin) {
         queryParams.set('isAdmin', 'true');
@@ -106,8 +112,13 @@ export function LectureRoomManager({
         cache: 'no-store',
       });
 
+      // 요청 도중 사용자의 입장/출석 액션이 발생했다면 오래된 응답은 무시
+      if (seqAtStart !== mutationSeqRef.current) return;
+
       if (res.ok) {
         const data = await res.json();
+        if (seqAtStart !== mutationSeqRef.current) return;
+
         setActiveCount(data.activeCount);
         setWaitingCount(data.waitingCount);
         setCurrentMax(data.maxAttendees);
@@ -135,14 +146,18 @@ export function LectureRoomManager({
           if (data.attendance.hasCheckedIn) {
             setCheckedIn(true);
             setShowAttendeeModal(false);
-          } else if (data.myStatus === 'entered' && !isAdmin) {
-            // 아직 출석 전이고, 이 세션을 닫지 않았다면 자동으로 참석자 모달 오픈
-            if (attendeeDismissedSessionId !== data.attendance.sessionId && !attendeeSuccess) {
-              setShowAttendeeModal(true);
+          } else {
+            setCheckedIn(false);
+            if (!isAdmin && currentUser && (data.myStatus === 'entered' || data.activeCount < data.maxAttendees || data.maxAttendees === 0)) {
+              // 아직 출석 전이고, 이 세션을 닫지 않았다면 자동으로 참석자 모달 오픈
+              if (attendeeDismissedSessionId !== data.attendance.sessionId && !attendeeSuccess) {
+                setShowAttendeeModal(true);
+              }
             }
           }
         } else {
           setRoomAttendance(null);
+          setCheckedIn(false);
           // 세션 종료 시 팝업 닫기
           if (!isAdmin) {
             setShowAttendeeModal(false);
@@ -177,18 +192,21 @@ export function LectureRoomManager({
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [lectureId, currentUser?.id, isAdmin, attendeeDismissedSessionId, attendeeSuccess]);
+  }, [lectureId, currentUser?.id, currentUser?.name, isAdmin, attendeeDismissedSessionId, attendeeSuccess]);
 
   // 페이지 진입 시 로그인 회원 자동 입장 시도
   useEffect(() => {
-    if (currentUser && myStatus === 'none') {
+    const userKey = currentUser ? `${lectureId}_${currentUser.id || currentUser.name}` : '';
+    if (currentUser && userKey && autoEnteredUserKeyRef.current !== userKey) {
+      autoEnteredUserKeyRef.current = userKey;
       handleEnter();
     }
-  }, [currentUser]);
+  }, [lectureId, currentUser?.id, currentUser?.name]);
 
   // 강의실 입장
   const handleEnter = async () => {
     if (!currentUser) return;
+    mutationSeqRef.current += 1;
     setActionLoading(true);
     setStatusMessage(null);
     try {
@@ -203,10 +221,21 @@ export function LectureRoomManager({
         }),
       });
       const data = await res.json();
+      mutationSeqRef.current += 1;
       if (res.ok) {
         setMyStatus(data.status);
         setQueuePosition(data.queuePosition || 0);
         setStatusMessage(data.message);
+        if (data.room) {
+          setActiveCount(data.room.activeCount);
+          setWaitingCount(data.room.waitingCount);
+          setCurrentMax(data.room.maxAttendees);
+          setActiveMembers(data.room.activeMembers || []);
+          setWaitingMembers(data.room.waitingMembers || []);
+        }
+        if (onRoomStatusChange) {
+          onRoomStatusChange(data.status === 'entered');
+        }
         fetchRoomStatus();
       }
     } catch (_) {
@@ -222,6 +251,7 @@ export function LectureRoomManager({
     if (!confirm('강의실에서 퇴장하시겠습니까? 퇴장 시 대기 중인 회원이 자동으로 입장합니다.')) {
       return;
     }
+    mutationSeqRef.current += 1;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/lectures/${lectureId}/room`, {
@@ -229,13 +259,27 @@ export function LectureRoomManager({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'leave',
+          user: currentUser,
           userId: currentUser.id,
+          userName: currentUser.name,
+          userPhone: currentUser.phoneNumber,
         }),
       });
+      const data = await res.json();
+      mutationSeqRef.current += 1;
       if (res.ok) {
         setMyStatus('none');
         setQueuePosition(0);
-        fetchRoomStatus();
+        if (data.room) {
+          setActiveCount(data.room.activeCount);
+          setWaitingCount(data.room.waitingCount);
+          setCurrentMax(data.room.maxAttendees);
+          setActiveMembers(data.room.activeMembers || []);
+          setWaitingMembers(data.room.waitingMembers || []);
+        }
+        if (onRoomStatusChange) {
+          onRoomStatusChange(false);
+        }
       }
     } catch (_) {
     } finally {
@@ -250,6 +294,7 @@ export function LectureRoomManager({
       alert('정원은 0 이상의 숫자를 입력하세요. (0은 무제한)');
       return;
     }
+    mutationSeqRef.current += 1;
     try {
       const res = await fetch(`/api/lectures/${lectureId}/room`, {
         method: 'POST',
@@ -259,7 +304,16 @@ export function LectureRoomManager({
           maxAttendees: num,
         }),
       });
+      const data = await res.json();
+      mutationSeqRef.current += 1;
       if (res.ok) {
+        if (data.room) {
+          setActiveCount(data.room.activeCount);
+          setWaitingCount(data.room.waitingCount);
+          setCurrentMax(data.room.maxAttendees);
+          setActiveMembers(data.room.activeMembers || []);
+          setWaitingMembers(data.room.waitingMembers || []);
+        }
         alert(`강의실 정원이 ${num === 0 ? '무제한' : num + '명'}으로 변경되었습니다.`);
         setIsUpdatingMax(false);
         fetchRoomStatus();
@@ -275,6 +329,7 @@ export function LectureRoomManager({
       alert('강의 시작 시간을 입력해주세요. (예: 19:30 또는 2026-10-12 19:30)');
       return;
     }
+    mutationSeqRef.current += 1;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/lectures/${lectureId}/room`, {
@@ -285,6 +340,7 @@ export function LectureRoomManager({
           startTime: startTimeInput.trim(),
         }),
       });
+      mutationSeqRef.current += 1;
       if (res.ok) {
         setStartTime(startTimeInput.trim());
         setIsUpdatingStartTime(false);
@@ -303,6 +359,7 @@ export function LectureRoomManager({
   // 1. 관리자: 4자리 랜덤 숫자 출석 체크 시작
   const handleStartAttendance = async () => {
     if (!isAdmin) return;
+    mutationSeqRef.current += 1;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/lectures/${lectureId}/room`, {
@@ -314,8 +371,20 @@ export function LectureRoomManager({
         }),
       });
       const data = await res.json();
+      mutationSeqRef.current += 1;
       if (res.ok && data.code) {
         setAdminGeneratedCode(data.code);
+        if (data.session) {
+          setRoomAttendance({
+            sessionId: data.session.sessionId,
+            title: data.session.title,
+            isActive: true,
+            startedAt: data.session.startedAt,
+            code: data.code,
+            checkedInCount: 0,
+            hasCheckedIn: false,
+          });
+        }
         setShowAdminCodeModal(true);
         fetchRoomStatus();
       } else {
@@ -334,6 +403,7 @@ export function LectureRoomManager({
     if (!confirm('현재 진행 중인 실시간 출석 체크를 마감하시겠습니까?')) {
       return;
     }
+    mutationSeqRef.current += 1;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/lectures/${lectureId}/room`, {
@@ -341,7 +411,9 @@ export function LectureRoomManager({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'stopAttendance' }),
       });
+      mutationSeqRef.current += 1;
       if (res.ok) {
+        setRoomAttendance(null);
         setShowAdminCodeModal(false);
         fetchRoomStatus();
         alert('실시간 출석 체크가 마감되었습니다.');
@@ -366,6 +438,7 @@ export function LectureRoomManager({
       return;
     }
 
+    mutationSeqRef.current += 1;
     setActionLoading(true);
     setAttendeeError(null);
     try {
@@ -379,9 +452,20 @@ export function LectureRoomManager({
         }),
       });
       const data = await res.json();
+      mutationSeqRef.current += 1;
       if (res.ok) {
         setAttendeeSuccess(true);
         setCheckedIn(true);
+        setMyStatus('entered');
+        setRoomAttendance((prev) =>
+          prev
+            ? {
+                ...prev,
+                hasCheckedIn: true,
+                checkedInCount: prev.checkedInCount + 1,
+              }
+            : prev
+        );
         setTimeout(() => {
           setShowAttendeeModal(false);
           setAttendeeSuccess(false);
@@ -405,8 +489,7 @@ export function LectureRoomManager({
     }
 
     if (myStatus !== 'entered') {
-      alert('출석 체크는 해당 강의실에 정식 입장한 회원만 가능합니다. 먼저 강의실에 입장해 주세요.');
-      return;
+      await handleEnter();
     }
 
     setShowAttendeeModal(true);
@@ -663,16 +746,16 @@ export function LectureRoomManager({
               ) : (
                 <button
                   onClick={handleCheckIn}
-                  disabled={actionLoading || myStatus !== 'entered' || !roomAttendance?.isActive}
+                  disabled={actionLoading || !currentUser || myStatus === 'waiting' || !roomAttendance?.isActive}
                   className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm ${
-                    roomAttendance?.isActive && myStatus === 'entered'
+                    roomAttendance?.isActive && currentUser && myStatus !== 'waiting'
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                   }`}
                   title={
                     !roomAttendance?.isActive
                       ? '관리자가 출석 체크를 시작할 때까지 대기해주세요'
-                      : myStatus === 'entered'
+                      : myStatus !== 'waiting'
                       ? '4자리 출석 번호 입력하기'
                       : '강의실 입장 회원만 출석 가능'
                   }
@@ -681,7 +764,7 @@ export function LectureRoomManager({
                   <span>
                     {!roomAttendance?.isActive
                       ? '출석 대기 중'
-                      : myStatus === 'entered'
+                      : myStatus !== 'waiting'
                       ? '4자리 번호 입력하기'
                       : '입장 회원만 출석 가능'}
                   </span>

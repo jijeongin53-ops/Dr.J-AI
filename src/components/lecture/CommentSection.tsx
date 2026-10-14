@@ -60,7 +60,7 @@ export function CommentSection({
     };
 
     fetchLatestComments();
-    const interval = setInterval(fetchLatestComments, 5000);
+    const interval = setInterval(fetchLatestComments, 4000);
     return () => clearInterval(interval);
   }, [lectureId]);
 
@@ -75,7 +75,7 @@ export function CommentSection({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lectureId,
-          authorId: currentUser.id,
+          authorId: currentUser.id || currentUser.name,
           authorName: currentUser.name,
           authorRole: currentUser.role,
           carrotNickname: currentUser.carrotNickname || currentUser.name,

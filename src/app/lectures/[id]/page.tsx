@@ -12,7 +12,7 @@ import { LectureReviewSection } from '@/components/lecture/LectureReviewSection'
 import { LectureRoomManager } from '@/components/lecture/LectureRoomManager';
 import { RoleBadge } from '@/components/common/RoleBadge';
 import { LectureEditModal } from '@/components/admin/LectureEditModal';
-import { mergeLectures, deleteStoredLecture } from '@/lib/lecturesStorage';
+import { mergeLectures, deleteStoredLecture, getStoredLectures } from '@/lib/lecturesStorage';
 import { ArrowLeft, Clock, Calendar, FileText, Edit2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,12 +29,24 @@ export default function LectureDetailPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) setCurrentUser(user);
+    const syncAuth = () => {
+      const user = getCurrentUser();
+      setCurrentUser(user);
+    };
+    syncAuth();
+    window.addEventListener('storage', syncAuth);
+    window.addEventListener('authChange', syncAuth);
+
+    const rawStored = getStoredLectures();
+    const rawMatchedById = rawStored.find((l) => l.id === lectureId);
 
     // 로컬스토리지 병합 데이터에서 먼저 조회
     const localLectures = mergeLectures(initialLectures);
-    const localFound = localLectures.find((l) => l.id === lectureId);
+    const localFound =
+      localLectures.find((l) => l.id === lectureId) ||
+      (rawMatchedById
+        ? localLectures.find((l) => l.title.trim() === rawMatchedById.title.trim())
+        : undefined);
     if (localFound) {
       setLecture(localFound);
       setLoading(false);
@@ -45,7 +57,11 @@ export default function LectureDetailPage() {
       .then((res) => res.json())
       .then((data) => {
         const merged = mergeLectures(data.lectures || initialLectures);
-        const found = merged.find((l: Lecture) => l.id === lectureId);
+        const found =
+          merged.find((l: Lecture) => l.id === lectureId) ||
+          (rawMatchedById
+            ? merged.find((l: Lecture) => l.title.trim() === rawMatchedById.title.trim())
+            : undefined);
         if (found) setLecture(found);
       })
       .catch(() => {
@@ -57,14 +73,20 @@ export default function LectureDetailPage() {
       .finally(() => setLoading(false));
 
     // 댓글 조회
-    fetch(`/api/comments?lectureId=${lectureId}`, { cache: 'no-store' })
+    const targetId = localFound?.id || lectureId;
+    fetch(`/api/comments?lectureId=${targetId}`, { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         if (data.comments) setComments(data.comments);
       })
       .catch(() => {
-        setComments(initialComments.filter((c) => c.lectureId === lectureId));
+        setComments(initialComments.filter((c) => c.lectureId === targetId));
       });
+
+    return () => {
+      window.removeEventListener('storage', syncAuth);
+      window.removeEventListener('authChange', syncAuth);
+    };
   }, [lectureId]);
 
   const handleDelete = async () => {

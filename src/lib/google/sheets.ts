@@ -413,19 +413,33 @@ export async function addDrJQuestion(question: DrJQuestion): Promise<DrJQuestion
   return question;
 }
 
-// 구글 시트 실시간 브릿지 저장소 헬퍼 (서버리스 인스턴스 간 댓글/후기/채팅/강의 영구 공유)
-async function saveRecordToSheetStore(
-  tag: '__COMMENT__' | '__REVIEW__' | '__CHAT__' | '__LECTURE__' | '__LECTURE_DELETE__',
+// 구글 시트 실시간 브릿지 저장소 헬퍼 (서버리스 인스턴스 간 댓글/후기/채팅/강의/강의실입장/출석 영구 공유)
+let cachedStoreRows: Array<{ tag: string; subKey: string; jsonStr: string }> | null = null;
+let lastStoreFetchTime = 0;
+
+export async function saveRecordToSheetStore(
+  tag:
+    | '__COMMENT__'
+    | '__REVIEW__'
+    | '__CHAT__'
+    | '__LECTURE__'
+    | '__LECTURE_DELETE__'
+    | '__ROOM_EVENT__'
+    | '__ATTENDANCE_EVENT__',
   subKey: string,
   userName: string,
   payloadObj: any,
   contentText: string
 ): Promise<void> {
+  // 쓰기 발생 시 즉시 캐시 무효화
+  cachedStoreRows = null;
+  lastStoreFetchTime = 0;
+
   const gasUrl = getRuntimeGasUrl();
   if (!gasUrl) return;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 4500);
     await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -443,19 +457,36 @@ async function saveRecordToSheetStore(
       }),
     });
     clearTimeout(timer);
+    cachedStoreRows = null;
+    lastStoreFetchTime = 0;
   } catch (e: any) {
     console.warn(`[Google Sheets Store] ${tag} 저장 실패:`, e.message);
   }
 }
 
-async function fetchAllSheetStoreRows(): Promise<Array<{ tag: string; subKey: string; jsonStr: string }>> {
+export async function fetchAllSheetStoreRows(
+  forceFresh: boolean = false
+): Promise<Array<{ tag: string; subKey: string; jsonStr: string }>> {
+  const now = Date.now();
+  if (!forceFresh && cachedStoreRows && now - lastStoreFetchTime < 800) {
+    return cachedStoreRows;
+  }
+
   try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('DrJ_질문함')}`;
-    const res = await fetch(gvizUrl, { cache: 'no-store' });
-    if (!res.ok) return [];
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(
+      'DrJ_질문함'
+    )}&_t=${now}`;
+    const res = await fetch(gvizUrl, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
+    if (!res.ok) return cachedStoreRows || [];
     const text = await res.text();
     const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
-    if (!jsonMatch || !jsonMatch[1]) return [];
+    if (!jsonMatch || !jsonMatch[1]) return cachedStoreRows || [];
     const parsed = JSON.parse(jsonMatch[1]);
     const rows = parsed?.table?.rows || [];
     const result: Array<{ tag: string; subKey: string; jsonStr: string }> = [];
@@ -468,9 +499,11 @@ async function fetchAllSheetStoreRows(): Promise<Array<{ tag: string; subKey: st
         result.push({ tag, subKey, jsonStr });
       }
     }
+    cachedStoreRows = result;
+    lastStoreFetchTime = Date.now();
     return result;
   } catch {
-    return [];
+    return cachedStoreRows || [];
   }
 }
 
@@ -481,6 +514,10 @@ export async function getReviews(lectureId?: string): Promise<LectureReview[]> {
   const storeRows = await fetchAllSheetStoreRows();
   const map = new Map<string, LectureReview>();
 
+  for (const mem of inMemoryReviews) {
+    if (mem && mem.id) map.set(mem.id, mem);
+  }
+
   for (const r of storeRows) {
     if (r.tag === '__REVIEW__') {
       try {
@@ -490,12 +527,8 @@ export async function getReviews(lectureId?: string): Promise<LectureReview[]> {
     }
   }
 
-  for (const mem of inMemoryReviews) {
-    map.set(mem.id, mem);
-  }
-
   // 최신순 정렬
-  const merged = Array.from(map.values()).reverse();
+  const merged = Array.from(map.values()).sort((a, b) => b.id.localeCompare(a.id));
   inMemoryReviews = merged;
 
   if (lectureId) {

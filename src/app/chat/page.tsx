@@ -10,6 +10,7 @@ export default function ChatPage() {
   const [currentUser, setCurrentUser] = useState<MemberUser | null>(null);
 
   useEffect(() => {
+    window.scrollTo({ top: 0 });
     const syncUser = async () => {
       const user = getCurrentUser();
       setCurrentUser(user);
@@ -20,7 +21,8 @@ export default function ChatPage() {
           const res = await fetch('/api/auth', { cache: 'no-store' });
           if (res.ok) {
             const data = await res.json();
-            const found = (data.members || []).find(
+            const list: MemberUser[] = data.users || data.members || [];
+            const found = list.find(
               (m: MemberUser) => m.id === user.id || m.name === user.name
             );
             if (found && (found.status !== user.status || found.role !== user.role)) {

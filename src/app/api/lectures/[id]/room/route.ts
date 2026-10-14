@@ -8,9 +8,12 @@ import {
   startRoomAttendance,
   stopRoomAttendance,
   checkInRoomAttendance,
+  syncAllRoomsFromSheet,
 } from '@/lib/lectureRoom';
 import { MemberUser } from '@/types';
 import { recordLectureRoomEntry } from '@/lib/google/sheets';
+
+export const dynamic = 'force-dynamic';
 
 // 강의실 참여 및 대기 현황 조회
 export async function GET(
@@ -22,9 +25,11 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId') || undefined;
     const userPhone = searchParams.get('userPhone') || undefined;
+    const userName = searchParams.get('userName') || undefined;
     const isAdmin = searchParams.get('isAdmin') === 'true';
 
-    const status = getMemberRoomStatus(lectureId, userId, userPhone, isAdmin);
+    await syncAllRoomsFromSheet();
+    const status = getMemberRoomStatus(lectureId, userId, userPhone, isAdmin, userName);
     return NextResponse.json(status);
   } catch (error) {
     return NextResponse.json(
@@ -42,17 +47,17 @@ export async function POST(
   try {
     const lectureId = params.id;
     const body = await request.json();
-    const { action, user, userId, maxAttendees, startTime, title, code } = body;
+    const { action, user, userId, userName, userPhone, maxAttendees, startTime, title, code } = body;
 
     // 1. 강의실 입장
     if (action === 'enter') {
       if (!user) {
         return NextResponse.json({ error: '회원 정보가 필요합니다.' }, { status: 400 });
       }
-      const result = enterLectureRoom(lectureId, user as MemberUser, maxAttendees);
+      const result = await enterLectureRoom(lectureId, user as MemberUser, maxAttendees);
 
-      // 구글 스프레드시트 [회원 로그인 현황] 시트에 강의실 입장 현황 자동 기록 (비동기)
-      if (result.status === 'entered' && (user as MemberUser)?.name) {
+      // 구글 스프레드시트 [회원 로그인 현황] 시트에 강의실 입장 현황 자동 기록 (비동기, 최초 입장 시에만)
+      if (result.status === 'entered' && !result.alreadyEntered && (user as MemberUser)?.name) {
         recordLectureRoomEntry((user as MemberUser).name, title || `강의 #${lectureId}`).catch((err) =>
           console.warn('[Activity] 강의실 입장 기록 실패:', err)
         );
@@ -79,10 +84,12 @@ export async function POST(
     // 2. 강의실 퇴장
     if (action === 'leave') {
       const targetId = userId || user?.id;
-      if (!targetId) {
+      const targetName = userName || user?.name;
+      const targetPhone = userPhone || user?.phoneNumber;
+      if (!targetId && !targetName) {
         return NextResponse.json({ error: '퇴장할 회원 ID가 필요합니다.' }, { status: 400 });
       }
-      const result = leaveLectureRoom(lectureId, targetId);
+      const result = await leaveLectureRoom(lectureId, targetId || '', targetName, targetPhone);
       return NextResponse.json({
         success: true,
         promotedUsers: result.promotedUsers,
@@ -102,7 +109,7 @@ export async function POST(
       if (typeof maxAttendees !== 'number') {
         return NextResponse.json({ error: '정원 숫자가 올바르지 않습니다.' }, { status: 400 });
       }
-      const room = setRoomMaxAttendees(lectureId, maxAttendees);
+      const room = await setRoomMaxAttendees(lectureId, maxAttendees);
       return NextResponse.json({
         success: true,
         room: {
@@ -121,7 +128,7 @@ export async function POST(
       if (typeof startTime !== 'string') {
         return NextResponse.json({ error: '시작 시간 형식이 올바르지 않습니다.' }, { status: 400 });
       }
-      const room = setRoomStartTime(lectureId, startTime.trim());
+      const room = await setRoomStartTime(lectureId, startTime.trim());
       return NextResponse.json({
         success: true,
         startTime: room.startTime,
@@ -131,7 +138,7 @@ export async function POST(
 
     // 5. 관리자: 4자리 랜덤 숫자 출석 체크 시작
     if (action === 'startAttendance') {
-      const result = startRoomAttendance(lectureId, title, code);
+      const result = await startRoomAttendance(lectureId, title, code);
       return NextResponse.json({
         success: true,
         code: result.code,
@@ -142,7 +149,7 @@ export async function POST(
 
     // 6. 관리자: 실시간 출석 체크 마감/종료
     if (action === 'stopAttendance') {
-      const stopped = stopRoomAttendance(lectureId);
+      const stopped = await stopRoomAttendance(lectureId);
       return NextResponse.json({
         success: stopped,
         message: '출석 체크가 종료되었습니다.',
@@ -157,7 +164,7 @@ export async function POST(
       if (!code || typeof code !== 'string') {
         return NextResponse.json({ error: '4자리 출석 번호를 입력해주세요.' }, { status: 400 });
       }
-      const result = checkInRoomAttendance(lectureId, user as MemberUser, code);
+      const result = await checkInRoomAttendance(lectureId, user as MemberUser, code);
       if (!result.success) {
         return NextResponse.json({ error: result.message }, { status: 400 });
       }

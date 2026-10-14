@@ -1,5 +1,6 @@
 import { MemberUser, MemberRole } from '@/types';
-import { getRuntimeGasUrl } from './google/sheets';
+import { getRuntimeGasUrl, saveRecordToSheetStore, fetchAllSheetStoreRows } from './google/sheets';
+import { getKoreanNowString } from './formatters';
 
 // 강의실별 실시간 출석 세션 정보
 export interface RoomAttendance {
@@ -28,8 +29,250 @@ export interface RoomState {
   attendance?: RoomAttendance | null; // 현재 진행 중인 출석 체크 세션
 }
 
+// 구글 시트에 기록되는 강의실 이벤트 타입 (동시 접속 시 덮어쓰기 방지)
+export interface RoomEvent {
+  eventId: string;
+  lectureId: string;
+  type:
+    | 'enter'
+    | 'leave'
+    | 'updateMaxAttendees'
+    | 'updateStartTime'
+    | 'startAttendance'
+    | 'stopAttendance'
+    | 'checkInAttendance';
+  timestamp: number;
+  user?: MemberUser;
+  userId?: string;
+  userName?: string;
+  userPhone?: string;
+  maxAttendees?: number;
+  startTime?: string;
+  session?: RoomAttendance;
+  checkedUser?: {
+    userId: string;
+    userName: string;
+    phoneNumber: string;
+    role: MemberRole;
+    checkedAt: string;
+  };
+}
+
 // 메모리 내 전체 강의실 상태 저장소
 const roomStates: Map<string, RoomState> = new Map();
+const inMemoryRoomEvents: RoomEvent[] = [];
+
+function cleanPhoneDigits(phone?: string): string {
+  return (phone || '').replace(/\D/g, '');
+}
+
+function isSameRoomUser(
+  a: { id?: string; userId?: string; name?: string; userName?: string; phoneNumber?: string },
+  b: { id?: string; userId?: string; name?: string; userName?: string; phoneNumber?: string }
+): boolean {
+  const aId = (a.id || a.userId || '').trim();
+  const bId = (b.id || b.userId || '').trim();
+  if (aId && bId && aId === bId) return true;
+
+  const aName = (a.name || a.userName || '').trim();
+  const bName = (b.name || b.userName || '').trim();
+  if (aName && bName && aName === bName) return true;
+
+  const aPhone = cleanPhoneDigits(a.phoneNumber);
+  const bPhone = cleanPhoneDigits(b.phoneNumber);
+  if (aPhone && bPhone && aPhone === bPhone) return true;
+
+  return false;
+}
+
+async function appendRoomEvent(event: RoomEvent): Promise<void> {
+  inMemoryRoomEvents.push(event);
+  const actorName =
+    event.user?.name ||
+    event.checkedUser?.userName ||
+    event.userName ||
+    '시스템';
+  await saveRecordToSheetStore(
+    '__ROOM_EVENT__',
+    event.lectureId,
+    actorName,
+    event,
+    `${event.type}:${event.lectureId}`
+  );
+}
+
+function applyRoomEventToState(room: RoomState, ev: RoomEvent): void {
+  if (ev.type === 'enter' && ev.user) {
+    const user = ev.user;
+    if (typeof ev.maxAttendees === 'number' && ev.maxAttendees >= 0 && room.activeMembers.length === 0) {
+      room.maxAttendees = ev.maxAttendees;
+    }
+
+    // 관리자는 정원과 관계없이 프리패스 입장
+    if (user.role === 'admin' || user.name === '지정인') {
+      const existingIdx = room.activeMembers.findIndex((u) => isSameRoomUser(u, user));
+      if (existingIdx >= 0) {
+        room.activeMembers[existingIdx] = { ...room.activeMembers[existingIdx], ...user };
+      } else {
+        room.activeMembers.unshift(user);
+      }
+      room.waitingMembers = room.waitingMembers.filter((u) => !isSameRoomUser(u, user));
+      room.lastUpdated = ev.timestamp || Date.now();
+      return;
+    }
+
+    // 이미 정식 입장해 있는 경우
+    const activeIdx = room.activeMembers.findIndex((u) => isSameRoomUser(u, user));
+    if (activeIdx >= 0) {
+      room.activeMembers[activeIdx] = { ...room.activeMembers[activeIdx], ...user };
+      room.lastUpdated = ev.timestamp || Date.now();
+      return;
+    }
+
+    // 대기열에 이미 있는 경우
+    const waitIdx = room.waitingMembers.findIndex((u) => isSameRoomUser(u, user));
+    if (waitIdx >= 0) {
+      room.waitingMembers[waitIdx] = { ...room.waitingMembers[waitIdx], ...user };
+      room.lastUpdated = ev.timestamp || Date.now();
+      return;
+    }
+
+    // 정원에 여유가 있는 경우 (0은 무제한)
+    if (room.maxAttendees === 0 || room.activeMembers.length < room.maxAttendees) {
+      room.activeMembers.push(user);
+    } else {
+      room.waitingMembers.push(user);
+    }
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
+  if (ev.type === 'leave') {
+    const target = { id: ev.userId, name: ev.userName, phoneNumber: ev.userPhone };
+    const beforeLen = room.activeMembers.length;
+    room.activeMembers = room.activeMembers.filter((u) => !isSameRoomUser(u, target));
+    room.waitingMembers = room.waitingMembers.filter((u) => !isSameRoomUser(u, target));
+    if (room.activeMembers.length < beforeLen) {
+      promoteWaitingMembers(room);
+    }
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
+  if (ev.type === 'updateMaxAttendees' && typeof ev.maxAttendees === 'number') {
+    room.maxAttendees = Math.max(0, ev.maxAttendees);
+    promoteWaitingMembers(room);
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
+  if (ev.type === 'updateStartTime' && typeof ev.startTime === 'string') {
+    room.startTime = ev.startTime;
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
+  if (ev.type === 'startAttendance' && ev.session) {
+    room.attendance = {
+      ...ev.session,
+      isActive: true,
+      checkedInUsers: Array.isArray(ev.session.checkedInUsers) ? [...ev.session.checkedInUsers] : [],
+    };
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
+  if (ev.type === 'stopAttendance') {
+    if (room.attendance) {
+      room.attendance.isActive = false;
+    }
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
+  if (ev.type === 'checkInAttendance' && ev.checkedUser) {
+    const cu = ev.checkedUser;
+    // 출석 체크한 회원이 아직 activeMembers에 없으면 자동 등록
+    if (!room.activeMembers.some((u) => isSameRoomUser(u, cu))) {
+      room.activeMembers.push({
+        id: cu.userId,
+        name: cu.userName,
+        phoneNumber: cu.phoneNumber,
+        birthDate: '',
+        job: '',
+        email: '',
+        carrotNickname: cu.userName,
+        role: cu.role,
+        status: 'approved',
+        joinedAt: '',
+      });
+    }
+    if (room.attendance) {
+      const already = room.attendance.checkedInUsers.some((u) => isSameRoomUser(u, cu));
+      if (!already) {
+        room.attendance.checkedInUsers.push(cu);
+      }
+    }
+    room.lastUpdated = ev.timestamp || Date.now();
+  }
+}
+
+/**
+ * 구글 시트에 저장된 모든 강의실 이벤트를 읽어와 최신 상태를 재구성합니다.
+ */
+export async function syncAllRoomsFromSheet(forceFresh: boolean = false): Promise<void> {
+  try {
+    const rows = await fetchAllSheetStoreRows(forceFresh);
+    const eventMap = new Map<string, RoomEvent>();
+
+    for (const r of rows) {
+      if (r.tag === '__ROOM_EVENT__') {
+        try {
+          const ev = JSON.parse(r.jsonStr) as RoomEvent;
+          if (ev && ev.eventId && ev.lectureId) {
+            eventMap.set(ev.eventId, ev);
+          }
+        } catch (_) {}
+      }
+    }
+
+    for (const memEv of inMemoryRoomEvents) {
+      if (memEv && memEv.eventId && !eventMap.has(memEv.eventId)) {
+        eventMap.set(memEv.eventId, memEv);
+      }
+    }
+
+    const allEvents = Array.from(eventMap.values()).sort(
+      (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
+    );
+
+    // 강의실별로 처음부터 이벤트 재생하여 완벽한 정합성 유지
+    const rebuiltRooms = new Map<string, RoomState>();
+    for (const ev of allEvents) {
+      let room = rebuiltRooms.get(ev.lectureId);
+      if (!room) {
+        const prevRoom = roomStates.get(ev.lectureId);
+        room = {
+          lectureId: ev.lectureId,
+          maxAttendees: prevRoom?.maxAttendees ?? 30,
+          activeMembers: [],
+          waitingMembers: [],
+          lastUpdated: Date.now(),
+          startTime: prevRoom?.startTime,
+          attendance: null,
+        };
+        rebuiltRooms.set(ev.lectureId, room);
+      }
+      applyRoomEventToState(room, ev);
+    }
+
+    rebuiltRooms.forEach((room, lecId) => {
+      roomStates.set(lecId, room);
+    });
+  } catch (e) {
+    console.warn('[LectureRoom] 시트 동기화 실패:', e);
+  }
+}
 
 /**
  * 강의실 상태 객체 초기화 또는 가져오기
@@ -52,14 +295,23 @@ export function getOrCreateRoom(lectureId: string, initialMax: number = 30): Roo
 /**
  * 강의실 입장 가능한 최대 회원 수 설정/수정
  */
-export function setRoomMaxAttendees(lectureId: string, maxAttendees: number): RoomState {
+export async function setRoomMaxAttendees(lectureId: string, maxAttendees: number): Promise<RoomState> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId, maxAttendees);
-  room.maxAttendees = Math.max(0, maxAttendees);
+  const cleanMax = Math.max(0, maxAttendees);
+
+  const event: RoomEvent = {
+    eventId: `re_max_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'updateMaxAttendees',
+    timestamp: Date.now(),
+    maxAttendees: cleanMax,
+  };
 
   // 정원이 늘어난 경우 대기 중인 회원을 즉시 자동 입장 처리
-  promoteWaitingMembers(room);
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
 
-  room.lastUpdated = Date.now();
   return room;
 }
 
@@ -77,7 +329,7 @@ function promoteWaitingMembers(room: RoomState): MemberUser[] {
     const nextUser = room.waitingMembers.shift();
     if (nextUser) {
       // activeMembers에 중복 확인 후 추가
-      if (!room.activeMembers.some((u) => u.id === nextUser.id)) {
+      if (!room.activeMembers.some((u) => isSameRoomUser(u, nextUser))) {
         room.activeMembers.push(nextUser);
         promoted.push(nextUser);
       }
@@ -92,62 +344,61 @@ function promoteWaitingMembers(room: RoomState): MemberUser[] {
  * - 정원 미달: 즉시 activeMembers에 추가 (status: 'entered')
  * - 정원 초과: waitingMembers에 추가 (status: 'waiting', queuePosition 반환)
  */
-export function enterLectureRoom(
+export async function enterLectureRoom(
   lectureId: string,
   user: MemberUser,
   maxAttendees?: number
-): {
+): Promise<{
   status: 'entered' | 'waiting';
   queuePosition: number;
   room: RoomState;
+  alreadyEntered?: boolean;
   promoted?: MemberUser[];
-} {
+}> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId, maxAttendees ?? 30);
-  if (typeof maxAttendees === 'number' && maxAttendees >= 0) {
-    room.maxAttendees = maxAttendees;
-  }
 
-  // 관리자는 정원과 관계없이 프리패스 입장
-  if (user.role === 'admin' || user.name === '지정인') {
-    if (!room.activeMembers.some((u) => u.id === user.id)) {
-      room.activeMembers.unshift(user);
-    }
-    // 대기열에 있었으면 제거
-    room.waitingMembers = room.waitingMembers.filter((u) => u.id !== user.id);
-    return { status: 'entered', queuePosition: 0, room };
-  }
+  const wasAlreadyEntered = room.activeMembers.some((u) => isSameRoomUser(u, user));
+  const wasAlreadyWaitingIdx = room.waitingMembers.findIndex((u) => isSameRoomUser(u, user));
 
-  // 이미 정식 입장해 있는 경우
-  if (room.activeMembers.some((u) => u.id === user.id || u.phoneNumber === user.phoneNumber)) {
-    return { status: 'entered', queuePosition: 0, room };
+  // 이미 정식 입장해 있는 경우 중복 이벤트를 쓰지 않고 즉시 반환
+  if (wasAlreadyEntered) {
+    return { status: 'entered', queuePosition: 0, room, alreadyEntered: true };
   }
 
   // 대기열에 이미 있는 경우
-  const existingWaitIndex = room.waitingMembers.findIndex(
-    (u) => u.id === user.id || u.phoneNumber === user.phoneNumber
-  );
-  if (existingWaitIndex >= 0) {
+  if (wasAlreadyWaitingIdx >= 0 && !(user.role === 'admin' || user.name === '지정인')) {
     return {
       status: 'waiting',
-      queuePosition: existingWaitIndex + 1,
+      queuePosition: wasAlreadyWaitingIdx + 1,
       room,
+      alreadyEntered: true,
     };
   }
 
-  // 정원에 여유가 있는 경우 (0은 무제한)
-  if (room.maxAttendees === 0 || room.activeMembers.length < room.maxAttendees) {
-    room.activeMembers.push(user);
-    room.lastUpdated = Date.now();
-    return { status: 'entered', queuePosition: 0, room };
+  const event: RoomEvent = {
+    eventId: `re_enter_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'enter',
+    timestamp: Date.now(),
+    user,
+    maxAttendees,
+  };
+
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
+
+  const isNowEntered = room.activeMembers.some((u) => isSameRoomUser(u, user));
+  if (isNowEntered) {
+    return { status: 'entered', queuePosition: 0, room, alreadyEntered: false };
   }
 
-  // 정원 초과 -> 대기열 진입
-  room.waitingMembers.push(user);
-  room.lastUpdated = Date.now();
+  const waitIdx = room.waitingMembers.findIndex((u) => isSameRoomUser(u, user));
   return {
     status: 'waiting',
-    queuePosition: room.waitingMembers.length,
+    queuePosition: waitIdx >= 0 ? waitIdx + 1 : room.waitingMembers.length,
     room,
+    alreadyEntered: false,
   };
 }
 
@@ -155,30 +406,35 @@ export function enterLectureRoom(
  * 회원 강의실 퇴장 처리
  * - 나간 회원 수만큼 대기 회원(waitingMembers)을 즉시 자동 입장 승격
  */
-export function leaveLectureRoom(
+export async function leaveLectureRoom(
   lectureId: string,
-  userId: string
-): {
+  userId: string,
+  userName?: string,
+  userPhone?: string
+): Promise<{
   success: boolean;
   promotedUsers: MemberUser[];
   room: RoomState;
-} {
+}> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId);
-  const beforeLen = room.activeMembers.length;
 
-  room.activeMembers = room.activeMembers.filter((u) => u.id !== userId);
-  room.waitingMembers = room.waitingMembers.filter((u) => u.id !== userId);
+  const event: RoomEvent = {
+    eventId: `re_leave_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'leave',
+    timestamp: Date.now(),
+    userId,
+    userName,
+    userPhone,
+  };
 
-  let promotedUsers: MemberUser[] = [];
-  if (room.activeMembers.length < beforeLen) {
-    // 퇴장으로 빈자리가 생겼으므로 대기자 자동 입장
-    promotedUsers = promoteWaitingMembers(room);
-  }
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
 
-  room.lastUpdated = Date.now();
   return {
     success: true,
-    promotedUsers,
+    promotedUsers: [],
     room,
   };
 }
@@ -186,26 +442,38 @@ export function leaveLectureRoom(
 /**
  * 강의 시작 시간 설정
  */
-export function setRoomStartTime(lectureId: string, startTime: string): RoomState {
+export async function setRoomStartTime(lectureId: string, startTime: string): Promise<RoomState> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId);
-  room.startTime = startTime;
-  room.lastUpdated = Date.now();
+
+  const event: RoomEvent = {
+    eventId: `re_time_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'updateStartTime',
+    timestamp: Date.now(),
+    startTime,
+  };
+
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
+
   return room;
 }
 
 /**
  * 관리자: 4자리 랜덤 숫자를 생성하여 강의실 실시간 출석 체크 시작
  */
-export function startRoomAttendance(
+export async function startRoomAttendance(
   lectureId: string,
   title?: string,
   customCode?: string
-): { session: RoomAttendance; code: string } {
+): Promise<{ session: RoomAttendance; code: string }> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId);
 
   // 1. 4자리 랜덤 숫자 생성 (1000 ~ 9999)
   const randomCode = customCode || String(Math.floor(1000 + Math.random() * 9000));
-  const now = new Date().toISOString();
+  const now = getKoreanNowString();
 
   const newSession: RoomAttendance = {
     sessionId: `att_room_${Date.now()}`,
@@ -216,8 +484,16 @@ export function startRoomAttendance(
     checkedInUsers: [],
   };
 
-  room.attendance = newSession;
-  room.lastUpdated = Date.now();
+  const event: RoomEvent = {
+    eventId: `re_att_start_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'startAttendance',
+    timestamp: Date.now(),
+    session: newSession,
+  };
+
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
 
   // 구글 스프레드시트 '출석부' 시트 자동 생성 및 세션 시작 알림 (백그라운드 비동기)
   const gasUrl = getRuntimeGasUrl();
@@ -244,18 +520,27 @@ export function startRoomAttendance(
 /**
  * 관리자: 실시간 출석 체크 마감/종료
  */
-export function stopRoomAttendance(lectureId: string): boolean {
+export async function stopRoomAttendance(lectureId: string): Promise<boolean> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId);
   if (room.attendance) {
-    room.attendance.isActive = false;
-    room.lastUpdated = Date.now();
+    const currentSessionId = room.attendance.sessionId;
+    const event: RoomEvent = {
+      eventId: `re_att_stop_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      lectureId,
+      type: 'stopAttendance',
+      timestamp: Date.now(),
+    };
+
+    applyRoomEventToState(room, event);
+    await appendRoomEvent(event);
 
     const gasUrl = getRuntimeGasUrl();
     if (gasUrl) {
       fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'stopAttendance', sessionId: room.attendance.sessionId }),
+        body: JSON.stringify({ action: 'stopAttendance', sessionId: currentSessionId }),
       }).catch(() => {});
     }
     return true;
@@ -266,22 +551,34 @@ export function stopRoomAttendance(lectureId: string): boolean {
 /**
  * 참석자: 4자리 출석 번호 입력하여 출석 체크 완료
  */
-export function checkInRoomAttendance(
+export async function checkInRoomAttendance(
   lectureId: string,
   user: MemberUser,
   inputCode: string
-): { success: boolean; message: string; checkedAt?: string } {
+): Promise<{ success: boolean; message: string; checkedAt?: string }> {
+  await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId);
 
-  // 1. 강의실 입장 여부 확인
-  const isEntered = room.activeMembers.some(
-    (u) => u.id === user.id || u.phoneNumber === user.phoneNumber
-  );
+  // 1. 강의실 입장 여부 확인 (정원 여유가 있으면 자동 입장 처리하여 편의성 보장)
+  let isEntered = room.activeMembers.some((u) => isSameRoomUser(u, user));
   if (!isEntered) {
-    return {
-      success: false,
-      message: '출석 체크는 해당 강의실에 정상 입장한 회원만 가능합니다.',
-    };
+    if (room.maxAttendees === 0 || room.activeMembers.length < room.maxAttendees || user.role === 'admin' || user.name === '지정인') {
+      const enterEv: RoomEvent = {
+        eventId: `re_auto_enter_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        lectureId,
+        type: 'enter',
+        timestamp: Date.now(),
+        user,
+      };
+      applyRoomEventToState(room, enterEv);
+      await appendRoomEvent(enterEv);
+      isEntered = true;
+    } else {
+      return {
+        success: false,
+        message: '출석 체크는 해당 강의실에 정상 입장한 회원만 가능합니다.',
+      };
+    }
   }
 
   // 2. 진행 중인 출석 체크 세션 확인
@@ -302,9 +599,7 @@ export function checkInRoomAttendance(
   }
 
   // 4. 이미 출석 체크했는지 확인
-  const alreadyChecked = room.attendance.checkedInUsers.some(
-    (u) => u.userId === user.id || u.phoneNumber === user.phoneNumber
-  );
+  const alreadyChecked = room.attendance.checkedInUsers.some((u) => isSameRoomUser(u, user));
   if (alreadyChecked) {
     return {
       success: true,
@@ -312,22 +607,25 @@ export function checkInRoomAttendance(
     };
   }
 
-  const now = new Date();
-  const timeString = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate()
-  ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(
-    now.getMinutes()
-  ).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-
-  room.attendance.checkedInUsers.push({
+  const timeString = getKoreanNowString();
+  const checkedUser = {
     userId: user.id,
     userName: user.name,
     phoneNumber: user.phoneNumber,
     role: user.role,
     checkedAt: timeString,
-  });
+  };
 
-  room.lastUpdated = Date.now();
+  const event: RoomEvent = {
+    eventId: `re_att_checkin_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'checkInAttendance',
+    timestamp: Date.now(),
+    checkedUser,
+  };
+
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
 
   // 구글 스프레드시트 '출석부' 탭에 실시간 기록 전송
   const gasUrl = getRuntimeGasUrl();
@@ -367,7 +665,8 @@ export function getMemberRoomStatus(
   lectureId: string,
   userId?: string,
   userPhone?: string,
-  isAdmin: boolean = false
+  isAdmin: boolean = false,
+  userName?: string
 ): {
   myStatus: 'entered' | 'waiting' | 'none';
   queuePosition: number;
@@ -392,16 +691,13 @@ export function getMemberRoomStatus(
   let myStatus: 'entered' | 'waiting' | 'none' = 'none';
   let queuePosition = 0;
 
-  if (userId || userPhone) {
-    const isEntered = room.activeMembers.some(
-      (u) => (userId && u.id === userId) || (userPhone && u.phoneNumber === userPhone)
-    );
+  if (userId || userPhone || userName) {
+    const target = { id: userId, phoneNumber: userPhone, name: userName };
+    const isEntered = room.activeMembers.some((u) => isSameRoomUser(u, target));
     if (isEntered) {
       myStatus = 'entered';
     } else {
-      const waitIdx = room.waitingMembers.findIndex(
-        (u) => (userId && u.id === userId) || (userPhone && u.phoneNumber === userPhone)
-      );
+      const waitIdx = room.waitingMembers.findIndex((u) => isSameRoomUser(u, target));
       if (waitIdx >= 0) {
         myStatus = 'waiting';
         queuePosition = waitIdx + 1;
@@ -412,11 +708,11 @@ export function getMemberRoomStatus(
   // 출석 세션 요약 정보
   let attendanceSummary = null;
   if (room.attendance && room.attendance.isActive) {
-    const hasCheckedIn = (userId || userPhone)
-      ? room.attendance.checkedInUsers.some(
-          (u) => (userId && u.userId === userId) || (userPhone && u.phoneNumber === userPhone)
-        )
-      : false;
+    const target = { id: userId, phoneNumber: userPhone, name: userName };
+    const hasCheckedIn =
+      userId || userPhone || userName
+        ? room.attendance.checkedInUsers.some((u) => isSameRoomUser(u, target))
+        : false;
 
     attendanceSummary = {
       sessionId: room.attendance.sessionId,
@@ -448,10 +744,45 @@ export function getMemberRoomStatus(
 export function isUserInLectureRoom(
   lectureId: string,
   userId?: string,
-  userPhone?: string
+  userPhone?: string,
+  userName?: string
 ): boolean {
   const room = getOrCreateRoom(lectureId);
-  return room.activeMembers.some(
-    (u) => (userId && u.id === userId) || (userPhone && u.phoneNumber === userPhone)
+  return room.activeMembers.some((u) =>
+    isSameRoomUser(u, { id: userId, phoneNumber: userPhone, name: userName })
   );
+}
+
+/**
+ * 모든 강의실에서 4자리 출석 인증을 완료한 회원 목록 반환 (출석부 통합 연동용)
+ */
+export function getAllRoomCheckedInUsers(): Array<{
+  lectureId: string;
+  userId: string;
+  userName: string;
+  phoneNumber: string;
+  role: MemberRole;
+  checkedAt: string;
+}> {
+  const list: Array<{
+    lectureId: string;
+    userId: string;
+    userName: string;
+    phoneNumber: string;
+    role: MemberRole;
+    checkedAt: string;
+  }> = [];
+
+  roomStates.forEach((room, lectureId) => {
+    if (room.attendance && Array.isArray(room.attendance.checkedInUsers)) {
+      for (const u of room.attendance.checkedInUsers) {
+        list.push({
+          lectureId,
+          ...u,
+        });
+      }
+    }
+  });
+
+  return list;
 }

@@ -94,33 +94,34 @@ export function mergeLectures(serverLectures: Lecture[]): Lecture[] {
   const map = new Map<string, Lecture>();
   const seenTitles = new Map<string, string>(); // title -> id 매핑 (중복 방지)
 
-  // 로컬 데이터를 우선 반영
-  for (const l of local) {
-    if (deletedSet.has(l.id) || deletedSet.has(`title:${l.title.trim()}`)) continue;
-    map.set(l.id, l);
-    seenTitles.set(l.title.trim(), l.id);
-  }
-
-  // 서버 데이터를 병합 (로컬에 없는 것만 추가하되, 제목이 같으면 누락 필드만 보완)
+  // 서버 데이터를 먼저 기준(표준 ID)으로 등록하여 모든 브라우저/회원이 동일한 lecture.id를 공유하도록 보장
   for (const s of serverLectures) {
     if (deletedSet.has(s.id) || deletedSet.has(`title:${s.title.trim()}`)) continue;
-    const existingIdByTitle = seenTitles.get(s.title.trim());
-    const targetId = map.has(s.id) ? s.id : existingIdByTitle;
+    map.set(s.id, s);
+    seenTitles.set(s.title.trim(), s.id);
+  }
+
+  // 로컬 데이터를 병합 (제목이 같으면 서버 표준 ID를 유지하면서 누락된 영상/자료 필드만 보완)
+  for (const l of local) {
+    if (deletedSet.has(l.id) || deletedSet.has(`title:${l.title.trim()}`)) continue;
+    const existingIdByTitle = seenTitles.get(l.title.trim());
+    const targetId = map.has(l.id) ? l.id : existingIdByTitle;
 
     if (!targetId) {
-      map.set(s.id, s);
-      seenTitles.set(s.title.trim(), s.id);
+      map.set(l.id, l);
+      seenTitles.set(l.title.trim(), l.id);
     } else {
       const existing = map.get(targetId)!;
       map.set(targetId, {
-        ...s,
+        ...l,
         ...existing,
-        videoUrl: existing.videoUrl || s.videoUrl || '',
-        driveFileId: existing.driveFileId || s.driveFileId || '',
+        id: targetId,
+        videoUrl: existing.videoUrl || l.videoUrl || '',
+        driveFileId: existing.driveFileId || l.driveFileId || '',
         materials:
           existing.materials && existing.materials.length > 0
             ? existing.materials
-            : s.materials || [],
+            : l.materials || [],
       });
     }
   }
