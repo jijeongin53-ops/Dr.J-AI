@@ -67,6 +67,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: newLectureData.id,
           title: newLectureData.title,
           description: newLectureData.description,
           category: newLectureData.category,
@@ -76,6 +77,7 @@ export function LectureUploader({ onSuccess }: LectureUploaderProps) {
           minDownloadRole: newLectureData.minDownloadRole,
           maxAttendees: newLectureData.maxAttendees,
           materials: newLectureData.materials,
+          createdAt: newLectureData.createdAt,
         }),
       });
 

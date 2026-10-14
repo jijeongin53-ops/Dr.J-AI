@@ -328,6 +328,88 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // [ACTION 7-1]: 강의 등록 / 수정 / 삭제 / 일괄 동기화 (동영상 업로드 현황 시트)
+    if (action === "addLecture" || action === "updateLecture") {
+      var lecSheet = ss.getSheetByName("동영상 업로드 현황");
+      if (!lecSheet) {
+        lecSheet = ss.insertSheet("동영상 업로드 현황");
+        lecSheet.appendRow(["강의 번호", "강의 제목", "카테고리", "시청 가능 등급", "자료 다운로드 등급", "동영상 링크 (구글드라이브)", "재생시간", "등록일시", "강의 설명", "첨부자료 JSON", "입장 정원"]);
+      }
+      var lRows = lecSheet.getDataRange().getValues();
+      var targetId = String(data.id || "").trim();
+      var targetTitle = String(data.title || "").trim();
+      var matStr = typeof data.materials === "string" ? data.materials : JSON.stringify(data.materials || []);
+      var rowValues = [
+        targetId,
+        targetTitle,
+        data.category || "프롬프트 & 업무활용",
+        data.minViewRole || "guest",
+        data.minDownloadRole || "guest",
+        data.videoUrl || "",
+        data.duration || "45분",
+        data.createdAt || Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd"),
+        data.description || "",
+        matStr,
+        data.maxAttendees !== undefined ? data.maxAttendees : 30
+      ];
+      var updatedLec = false;
+      for (var lr = 1; lr < lRows.length; lr++) {
+        if (String(lRows[lr][0] || "").trim() === targetId || String(lRows[lr][1] || "").trim() === targetTitle) {
+          lecSheet.getRange(lr + 1, 1, 1, rowValues.length).setValues([rowValues]);
+          updatedLec = true;
+          break;
+        }
+      }
+      if (!updatedLec) {
+        lecSheet.appendRow(rowValues);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: action }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "deleteLecture") {
+      var delSheet = ss.getSheetByName("동영상 업로드 현황");
+      var delId = String(requestData.id || data.id || "").trim();
+      if (delSheet && delId) {
+        var dRows = delSheet.getDataRange().getValues();
+        for (var dr = dRows.length - 1; dr >= 1; dr--) {
+          if (String(dRows[dr][0] || "").trim() === delId) {
+            delSheet.deleteRow(dr + 1);
+          }
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "deleteLecture" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "syncLectures") {
+      var syncSheet = ss.getSheetByName("동영상 업로드 현황");
+      if (!syncSheet) {
+        syncSheet = ss.insertSheet("동영상 업로드 현황");
+      }
+      syncSheet.clear();
+      syncSheet.appendRow(["강의 번호", "강의 제목", "카테고리", "시청 가능 등급", "자료 다운로드 등급", "동영상 링크 (구글드라이브)", "재생시간", "등록일시", "강의 설명", "첨부자료 JSON", "입장 정원"]);
+      var lecturesList = requestData.lectures || [];
+      for (var li = 0; li < lecturesList.length; li++) {
+        var item = lecturesList[li];
+        syncSheet.appendRow([
+          item.id || "",
+          item.title || "",
+          item.category || "",
+          item.minViewRole || "guest",
+          item.minDownloadRole || "guest",
+          item.videoUrl || "",
+          item.duration || "45분",
+          item.createdAt || "",
+          item.description || "",
+          JSON.stringify(item.materials || []),
+          item.maxAttendees !== undefined ? item.maxAttendees : 30
+        ]);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "syncLectures" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // [ACTION 8]: 기본 회원 가입 행 추가
     if (action === "addUser" || (data.name && data.phoneNumber && !action)) {
       var sheet = ss.getSheetByName("Users") || ss.getActiveSheet();
@@ -377,6 +459,8 @@ function doGet(e) {
     if (!sheet) {
       sheet = setupLoginStatusSheet();
     }
+  } else if (sheetParam === "lectures" || sheetParam === "동영상 업로드 현황") {
+    sheet = ss.getSheetByName("동영상 업로드 현황") || ss.getActiveSheet();
   } else {
     sheet = ss.getSheetByName("Users") || ss.getActiveSheet();
   }

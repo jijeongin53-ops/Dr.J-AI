@@ -446,10 +446,109 @@ export async function addReview(review: LectureReview): Promise<LectureReview> {
   return review;
 }
 
+// 삭제 처리된 강의 ID 추적 (재조회 시 부활 방지)
+const deletedLectureIds = new Set<string>();
+
 /**
  * 강의 목록 조회
  */
 export async function getLectures(): Promise<Lecture[]> {
+  const sheetLectures: Lecture[] = [];
+
+  // 1. 구글 시트 '동영상 업로드 현황' 탭 실시간 조회 (gviz JSON API 활용)
+  try {
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('동영상 업로드 현황')}`;
+    const res = await fetch(gvizUrl, { cache: 'no-store' });
+    if (res.ok) {
+      const text = await res.text();
+      const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
+      if (jsonMatch && jsonMatch[1]) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        const rows = parsed?.table?.rows || [];
+        for (const r of rows) {
+          const c = r.c || [];
+          const id = String(c[0]?.v || '').trim();
+          const title = String(c[1]?.v || '').trim();
+          if (!id || !title || id === '강의 번호' || title === '강의 제목') continue;
+
+          const category = String(c[2]?.v || '프롬프트 & 업무활용').trim();
+          const minViewRole = (String(c[3]?.v || 'guest').trim() as any) || 'guest';
+          const minDownloadRole = (String(c[4]?.v || 'guest').trim() as any) || 'guest';
+          const videoUrl = String(c[5]?.v || '').trim();
+          const duration = String(c[6]?.v || '45분').trim();
+          const createdAt = String(c[7]?.f || c[7]?.v || new Date().toISOString().split('T')[0]).trim();
+          const description = String(c[8]?.v || '').trim();
+          let materials: any[] = [];
+          if (c[9]?.v) {
+            try {
+              materials = JSON.parse(String(c[9].v));
+            } catch (_) {}
+          }
+          const maxAttendees = c[10]?.v !== undefined && c[10]?.v !== null ? Number(c[10].v) : 30;
+
+          sheetLectures.push({
+            id,
+            title,
+            description,
+            category,
+            minViewRole,
+            minDownloadRole,
+            videoUrl,
+            driveFileId: videoUrl,
+            duration,
+            maxAttendees: !isNaN(maxAttendees) ? maxAttendees : 30,
+            materials: Array.isArray(materials) ? materials : [],
+            createdAt,
+            isPublished: true,
+          });
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Google Sheets] 동영상 업로드 현황 시트 조회 실패:', e.message);
+  }
+
+  // 2. 메모리 데이터(inMemoryLectures / initialLectures)와 시트 데이터를 중복 없이 병합
+  const mergedMap = new Map<string, Lecture>();
+  const titleToId = new Map<string, string>();
+
+  for (const item of inMemoryLectures) {
+    if (deletedLectureIds.has(item.id)) continue;
+    mergedMap.set(item.id, { ...item });
+    titleToId.set(item.title.trim(), item.id);
+  }
+
+  for (const sItem of sheetLectures) {
+    if (deletedLectureIds.has(sItem.id)) continue;
+    const matchId = mergedMap.has(sItem.id) ? sItem.id : titleToId.get(sItem.title.trim());
+
+    if (!matchId) {
+      mergedMap.set(sItem.id, {
+        ...sItem,
+        description: sItem.description || `${sItem.title} 강의 및 교육 자료실입니다.`,
+      });
+      titleToId.set(sItem.title.trim(), sItem.id);
+    } else {
+      const existing = mergedMap.get(matchId)!;
+      mergedMap.set(matchId, {
+        ...sItem,
+        ...existing,
+        description: existing.description || sItem.description || `${existing.title} 강의실입니다.`,
+        videoUrl: existing.videoUrl || sItem.videoUrl || '',
+        driveFileId: existing.driveFileId || sItem.driveFileId || existing.videoUrl || sItem.videoUrl || '',
+        materials:
+          existing.materials && existing.materials.length > 0
+            ? existing.materials
+            : sItem.materials || [],
+      });
+    }
+  }
+
+  const finalLectures = Array.from(mergedMap.values());
+  if (finalLectures.length > 0) {
+    inMemoryLectures = finalLectures;
+  }
+
   return inMemoryLectures;
 }
 
@@ -457,10 +556,13 @@ export async function getLectures(): Promise<Lecture[]> {
  * 강의 추가 (관리자용) - 구글 시트 '동영상 업로드 현황' 시트에 자동 기록
  */
 export async function addLecture(lecture: Lecture): Promise<Lecture> {
-  // 이미 존재하는 강의인지 확인 후 중복 방지
-  const existingIdx = inMemoryLectures.findIndex((l) => l.id === lecture.id);
+  deletedLectureIds.delete(lecture.id);
+  // 이미 존재하는 강의인지 확인 후 중복 방지 (ID 또는 제목 기준)
+  const existingIdx = inMemoryLectures.findIndex(
+    (l) => l.id === lecture.id || l.title.trim() === lecture.title.trim()
+  );
   if (existingIdx >= 0) {
-    inMemoryLectures[existingIdx] = lecture;
+    inMemoryLectures[existingIdx] = { ...inMemoryLectures[existingIdx], ...lecture };
   } else {
     inMemoryLectures.unshift(lecture);
   }
@@ -480,11 +582,14 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
           data: {
             id: lecture.id,
             title: lecture.title,
+            description: lecture.description,
             category: lecture.category,
             minViewRole: lecture.minViewRole,
             minDownloadRole: lecture.minDownloadRole,
             videoUrl: lecture.videoUrl,
             duration: lecture.duration,
+            maxAttendees: lecture.maxAttendees ?? 30,
+            materials: JSON.stringify(lecture.materials || []),
             createdAt: lecture.createdAt,
           },
         }),
@@ -503,70 +608,73 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
  * 강의 수정 (관리자용)
  */
 export async function updateLecture(updated: Lecture): Promise<Lecture | null> {
-  const index = inMemoryLectures.findIndex((l) => l.id === updated.id);
+  deletedLectureIds.delete(updated.id);
+  const index = inMemoryLectures.findIndex(
+    (l) => l.id === updated.id || l.title.trim() === updated.title.trim()
+  );
   if (index !== -1) {
     inMemoryLectures[index] = { ...inMemoryLectures[index], ...updated };
-
-    // 구글 스프레드시트 동기화 시도 (논블로킹)
-    const gasUrl = getRuntimeGasUrl();
-    if (gasUrl) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 3000);
-        fetch(gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            action: 'updateLecture',
-            data: updated,
-          }),
-        })
-          .then(() => clearTimeout(timer))
-          .catch(() => {});
-      } catch (e) {
-        // 무시
-      }
-    }
-
-    return inMemoryLectures[index];
+  } else {
+    inMemoryLectures.unshift(updated);
   }
-  return null;
+
+  // 구글 스프레드시트 동기화 시도 (논블로킹)
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          action: 'updateLecture',
+          data: updated,
+        }),
+      })
+        .then(() => clearTimeout(timer))
+        .catch(() => {});
+    } catch (e) {
+      // 무시
+    }
+  }
+
+  return index !== -1 ? inMemoryLectures[index] : updated;
 }
 
 /**
  * 강의 삭제 (관리자용)
  */
 export async function deleteLecture(id: string): Promise<boolean> {
+  deletedLectureIds.add(id);
   const beforeLen = inMemoryLectures.length;
   inMemoryLectures = inMemoryLectures.filter((l) => l.id !== id);
   const deleted = inMemoryLectures.length < beforeLen;
 
   // 구글 스프레드시트 동기화 시도 (논블로킹)
-  if (deleted) {
-    const gasUrl = getRuntimeGasUrl();
-    if (gasUrl) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 3000);
-        fetch(gasUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            action: 'deleteLecture',
-            id,
-          }),
-        })
-          .then(() => clearTimeout(timer))
-          .catch(() => {});
-      } catch (e) {
-        // 무시
-      }
+  const gasUrl = getRuntimeGasUrl();
+  if (gasUrl) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
+      fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          action: 'deleteLecture',
+          id,
+        }),
+      })
+        .then(() => clearTimeout(timer))
+        .catch(() => {});
+    } catch (e) {
+      // 무시
     }
   }
 
-  return deleted;
+  return deleted || true;
 }
 
 /**

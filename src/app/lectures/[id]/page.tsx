@@ -41,7 +41,7 @@ export default function LectureDetailPage() {
     }
 
     // 강의 정보 서버 조회
-    fetch('/api/lectures')
+    fetch('/api/lectures', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
         const merged = mergeLectures(data.lectures || initialLectures);

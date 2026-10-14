@@ -3,6 +3,8 @@ import { getLectures, addLecture, updateLecture, deleteLecture } from '@/lib/goo
 import { Lecture } from '@/types';
 import { extractDriveFileId } from '@/lib/google/drive';
 
+export const dynamic = 'force-dynamic';
+
 // 강의 목록 조회
 export async function GET() {
   const lectures = await getLectures();
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
     const driveFileId = videoUrl ? extractDriveFileId(videoUrl) : '';
 
     const newLecture: Lecture = {
-      id: `lec-${Date.now()}`,
+      id: body.id || `lec-${Date.now()}`,
       title,
       description,
       category: category || '프롬프트 & 업무활용',
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
         fileUrl: m.url || m.fileUrl || '',
         minDownloadRole: m.minDownloadRole || minDownloadRole,
       })),
-      createdAt: new Date().toISOString().split('T')[0],
+      createdAt: body.createdAt || new Date().toISOString().split('T')[0],
       isPublished: true,
     };
 

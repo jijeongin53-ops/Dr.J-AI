@@ -24,12 +24,28 @@ export default function LecturesPage() {
     const mergedInitial = mergeLectures(initialLectures);
     setLectures(mergedInitial);
 
-    fetch('/api/lectures')
+    fetch('/api/lectures', { cache: 'no-store' })
       .then((res) => res.json())
       .then((data) => {
-        if (data.lectures) {
+        if (data.lectures && Array.isArray(data.lectures)) {
           const merged = mergeLectures(data.lectures);
           setLectures(merged);
+
+          // 관리자인 경우 로컬스토리지에만 존재하는 강의를 서버에 자동 동기화
+          if (user?.role === 'admin') {
+            const serverTitles = new Set(
+              data.lectures.map((s: Lecture) => s.title.trim())
+            );
+            merged.forEach((lec) => {
+              if (!serverTitles.has(lec.title.trim())) {
+                fetch('/api/lectures', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(lec),
+                }).catch(() => {});
+              }
+            });
+          }
         }
       })
       .catch(() => {});
