@@ -20,7 +20,16 @@ export async function GET(request: Request) {
 
   // 0. 사용자 ID 기반 단일 조회 (실시간 상태 동기화용)
   if (userId) {
-    const user = users.find((u) => u.id === userId);
+    const cleanPollPhone = phoneNumber ? normalizePhone(phoneNumber) : '';
+    const user = users.find((u) => {
+      if (u.id === userId) return true;
+      if (name && u.name.trim() === name.trim()) {
+        if (!cleanPollPhone) return true;
+        const uClean = normalizePhone(u.phoneNumber);
+        return uClean === cleanPollPhone || getLast4PhoneDigits(u.phoneNumber) === cleanPollPhone.slice(-4);
+      }
+      return false;
+    });
     if (user) {
       if (user.name.trim() === '지정인' || normalizePhone(user.phoneNumber).includes('82030046')) {
         user.role = 'admin';
@@ -28,6 +37,7 @@ export async function GET(request: Request) {
       }
       return NextResponse.json({ user });
     }
+    return NextResponse.json({ user: null });
   }
 
   // 1. 성명(아이디)과 연락처 뒤 4자리(비밀번호)로 로그인

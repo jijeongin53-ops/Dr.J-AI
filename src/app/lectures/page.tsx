@@ -32,19 +32,23 @@ export default function LecturesPage() {
           setLectures(merged);
 
           // 관리자인 경우 로컬스토리지에만 존재하는 강의를 서버에 자동 동기화
-          if (user?.role === 'admin') {
-            const serverTitles = new Set(
-              data.lectures.map((s: Lecture) => s.title.trim())
+          if (user?.role === 'admin' || user?.name === '지정인') {
+            const serverIds = new Set(
+              data.lectures.map((s: Lecture) => s.id)
             );
-            merged.forEach((lec) => {
-              if (!serverTitles.has(lec.title.trim())) {
-                fetch('/api/lectures', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(lec),
-                }).catch(() => {});
+            (async () => {
+              for (const lec of merged) {
+                if (!serverIds.has(lec.id)) {
+                  try {
+                    await fetch('/api/lectures', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(lec),
+                    });
+                  } catch {}
+                }
               }
-            });
+            })();
           }
         }
       })

@@ -439,7 +439,7 @@ export async function saveRecordToSheetStore(
   if (!gasUrl) return;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4500);
+    const timer = setTimeout(() => controller.abort(), 9000);
     await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -573,8 +573,14 @@ export async function getLectures(): Promise<Lecture[]> {
 
   // 1. 구글 시트 '동영상 업로드 현황' 탭 실시간 조회 (gviz JSON API 활용)
   try {
-    const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('동영상 업로드 현황')}`;
-    const res = await fetch(gvizUrl, { cache: 'no-store' });
+    const gvizUrl = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('동영상 업로드 현황')}&_t=${Date.now()}`;
+    const res = await fetch(gvizUrl, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
+    });
     if (res.ok) {
       const text = await res.text();
       const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
@@ -644,32 +650,34 @@ export async function getLectures(): Promise<Lecture[]> {
     }
   }
 
-  // 2. 메모리 데이터(inMemoryLectures / initialLectures)와 시트 데이터를 중복 없이 병합
+  // 2. 메모리 데이터(inMemoryLectures / initialLectures)와 시트 데이터를 중복 없이 병합 (ID 기준)
   const mergedMap = new Map<string, Lecture>();
-  const titleToId = new Map<string, string>();
+
+  for (const item of initialLectures) {
+    if (deletedLectureIds.has(item.id)) continue;
+    mergedMap.set(item.id, { ...item });
+  }
 
   for (const item of inMemoryLectures) {
     if (deletedLectureIds.has(item.id)) continue;
-    mergedMap.set(item.id, { ...item });
-    titleToId.set(item.title.trim(), item.id);
+    const existing = mergedMap.get(item.id);
+    mergedMap.set(item.id, existing ? { ...existing, ...item } : { ...item });
   }
 
   for (const sItem of sheetLectures) {
     if (deletedLectureIds.has(sItem.id)) continue;
-    const matchId = mergedMap.has(sItem.id) ? sItem.id : titleToId.get(sItem.title.trim());
+    const existing = mergedMap.get(sItem.id);
 
-    if (!matchId) {
+    if (!existing) {
       mergedMap.set(sItem.id, {
         ...sItem,
         description: sItem.description || `${sItem.title} 강의 및 교육 자료실입니다.`,
       });
-      titleToId.set(sItem.title.trim(), sItem.id);
     } else {
-      const existing = mergedMap.get(matchId)!;
-      mergedMap.set(matchId, {
+      mergedMap.set(sItem.id, {
         ...existing,
         ...sItem,
-        id: matchId,
+        id: sItem.id,
         description: sItem.description || existing.description || `${existing.title} 강의실입니다.`,
         videoUrl: sItem.videoUrl || existing.videoUrl || '',
         driveFileId: sItem.driveFileId || existing.driveFileId || sItem.videoUrl || existing.videoUrl || '',
@@ -681,7 +689,14 @@ export async function getLectures(): Promise<Lecture[]> {
     }
   }
 
-  const finalLectures = Array.from(mergedMap.values());
+  // 최신 개설 강의가 상단에 오도록 ID 타임스탬프 기준 내림차순 정렬
+  const extractTime = (id: string) => {
+    const m = id.match(/(\d{10,})/);
+    return m ? Number(m[1]) : 0;
+  };
+  const finalLectures = Array.from(mergedMap.values()).sort(
+    (a, b) => extractTime(b.id) - extractTime(a.id)
+  );
   if (finalLectures.length > 0) {
     inMemoryLectures = finalLectures;
   }
@@ -694,10 +709,8 @@ export async function getLectures(): Promise<Lecture[]> {
  */
 export async function addLecture(lecture: Lecture): Promise<Lecture> {
   deletedLectureIds.delete(lecture.id);
-  // 이미 존재하는 강의인지 확인 후 중복 방지 (ID 또는 제목 기준)
-  const existingIdx = inMemoryLectures.findIndex(
-    (l) => l.id === lecture.id || l.title.trim() === lecture.title.trim()
-  );
+  // 이미 존재하는 강의인지 확인 후 중복 방지 (ID 기준)
+  const existingIdx = inMemoryLectures.findIndex((l) => l.id === lecture.id);
   if (existingIdx >= 0) {
     inMemoryLectures[existingIdx] = { ...inMemoryLectures[existingIdx], ...lecture };
   } else {
@@ -711,7 +724,7 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
   if (gasUrl) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3000);
+      const timer = setTimeout(() => controller.abort(), 5000);
       fetch(gasUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -748,9 +761,7 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
  */
 export async function updateLecture(updated: Lecture): Promise<Lecture | null> {
   deletedLectureIds.delete(updated.id);
-  const index = inMemoryLectures.findIndex(
-    (l) => l.id === updated.id || l.title.trim() === updated.title.trim()
-  );
+  const index = inMemoryLectures.findIndex((l) => l.id === updated.id);
   if (index !== -1) {
     inMemoryLectures[index] = { ...inMemoryLectures[index], ...updated };
   } else {
