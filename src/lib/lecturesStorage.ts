@@ -128,7 +128,9 @@ export function mergeLectures(serverLectures: Lecture[]): Lecture[] {
         videoUrl: existing.videoUrl || l.videoUrl || '',
         driveFileId: existing.driveFileId || l.driveFileId || '',
         materials:
-          existing.materials && existing.materials.length > 0
+          l.materials && l.materials.length > (existing.materials?.length || 0)
+            ? l.materials
+            : existing.materials && existing.materials.length > 0
             ? existing.materials
             : l.materials || [],
       });
