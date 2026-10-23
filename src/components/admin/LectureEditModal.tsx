@@ -7,6 +7,7 @@ import { updateStoredLecture } from '@/lib/lecturesStorage';
 import { X, CheckCircle2, Edit3, Plus, Trash2 } from 'lucide-react';
 
 const MAX_MATERIALS = 20;
+const MAX_VIDEOS = 3;
 
 interface MaterialInputItem {
   id: string;
@@ -34,7 +35,21 @@ export function LectureEditModal({
   const [title, setTitle] = useState(lecture.title);
   const [description, setDescription] = useState(lecture.description);
   const [category, setCategory] = useState<string>(lecture.category || LECTURE_CATEGORIES[1]);
-  const [videoUrl, setVideoUrl] = useState(lecture.videoUrl || '');
+  const [videoUrls, setVideoUrls] = useState<string[]>(() => {
+    if (Array.isArray(lecture.videoUrls) && lecture.videoUrls.length > 0) {
+      const cleaned = lecture.videoUrls.map((v) => String(v || '').trim()).filter(Boolean).slice(0, MAX_VIDEOS);
+      if (cleaned.length > 0) return cleaned;
+    }
+    if (lecture.videoUrl && lecture.videoUrl.trim()) {
+      const parts = lecture.videoUrl
+        .split(/\r?\n|\|/)
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .slice(0, MAX_VIDEOS);
+      if (parts.length > 0) return parts;
+    }
+    return [''];
+  });
   const [duration, setDuration] = useState(lecture.duration || '45분');
   const [startTime, setStartTime] = useState(lecture.startTime || '');
   const [minViewRole, setMinViewRole] = useState<MemberRole>(lecture.minViewRole || 'guest');
@@ -44,6 +59,28 @@ export function LectureEditModal({
   const [maxAttendees, setMaxAttendees] = useState<number>(
     typeof lecture.maxAttendees === 'number' ? lecture.maxAttendees : 30
   );
+
+  // 동영상 링크 추가/삭제/변경 핸들러 (최대 3개)
+  const handleAddVideoRow = () => {
+    if (videoUrls.length >= MAX_VIDEOS) {
+      alert(`동영상 링크는 최대 ${MAX_VIDEOS}개까지 추가할 수 있습니다.`);
+      return;
+    }
+    setVideoUrls((prev) => [...prev, '']);
+  };
+
+  const handleRemoveVideoRow = (index: number) => {
+    setVideoUrls((prev) => {
+      if (prev.length <= 1) {
+        return [''];
+      }
+      return prev.filter((_, idx) => idx !== index);
+    });
+  };
+
+  const handleVideoChange = (index: number, value: string) => {
+    setVideoUrls((prev) => prev.map((v, idx) => (idx === index ? value : v)));
+  };
 
   // Materials (최대 20개까지 첨부 가능)
   const initialMaterial = lecture.materials?.[0];
@@ -120,12 +157,18 @@ export function LectureEditModal({
         minDownloadRole,
       }));
 
+    const cleanedVideos = videoUrls
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .slice(0, MAX_VIDEOS);
+
     const updatedPayload: Lecture = {
       ...lecture,
       title: title.trim(),
       description: description.trim(),
       category,
-      videoUrl: videoUrl.trim(),
+      videoUrl: cleanedVideos[0] || '',
+      videoUrls: cleanedVideos,
       startTime: startTime.trim(),
       duration: duration.trim(),
       minViewRole,
@@ -262,19 +305,6 @@ export function LectureEditModal({
 
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                동영상 링크 or 파일 ID
-              </label>
-              <input
-                type="text"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                placeholder="https://drive.google.com/file/d/... 또는 파일ID"
-                className="w-full bg-white border border-gray-300 rounded-xl p-2.5 text-xs text-gray-900 focus:outline-none focus:border-carrot"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">
                 입장 회원 등급 *
               </label>
               <select
@@ -319,6 +349,56 @@ export function LectureEditModal({
                 title="초과 시 대기열로 등록되며 퇴장 발생 시 자동 입장됩니다 (0은 무제한)"
               />
               <span className="text-[10px] text-gray-400 mt-0.5 block">0 입력 시 무제한</span>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-gray-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-xs font-bold text-gray-800">
+                  강의 동영상 링크 목록 ({videoUrls.length}/{MAX_VIDEOS}개)
+                </label>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  구글 드라이브 동영상 공유 링크 또는 파일 ID를 최대 {MAX_VIDEOS}개까지 추가할 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddVideoRow}
+                disabled={videoUrls.length >= MAX_VIDEOS}
+                className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-carrot border border-blue-200 text-xs font-bold rounded-xl flex items-center gap-1 transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>동영상 추가 ({videoUrls.length}/{MAX_VIDEOS})</span>
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {videoUrls.map((vUrl, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-2 bg-gray-50/70 border border-gray-200/80 rounded-xl p-2.5"
+                >
+                  <span className="px-2 py-1 rounded-lg bg-white border border-gray-200 text-[11px] font-bold text-gray-700 shrink-0">
+                    영상 #{idx + 1}
+                  </span>
+                  <input
+                    type="text"
+                    value={vUrl}
+                    onChange={(e) => handleVideoChange(idx, e.target.value)}
+                    placeholder="https://drive.google.com/file/d/... 또는 파일ID"
+                    className="flex-1 bg-white border border-gray-300 rounded-xl p-2 text-xs text-gray-900 focus:outline-none focus:border-carrot"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveVideoRow(idx)}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition shrink-0"
+                    title={videoUrls.length > 1 ? '이 동영상 칸 삭제' : '입력 내용 비우기'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
 

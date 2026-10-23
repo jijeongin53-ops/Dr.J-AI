@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       minViewRole = 'guest',
       minDownloadRole = 'guest',
       videoUrl,
+      videoUrls,
       startTime,
       duration = '45분',
       materials = [],
@@ -33,7 +34,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '제목과 설명은 필수 항목입니다.' }, { status: 400 });
     }
 
-    const driveFileId = videoUrl ? extractDriveFileId(videoUrl) : '';
+    const cleanedVideoUrls: string[] = (
+      Array.isArray(videoUrls)
+        ? videoUrls
+        : videoUrl
+        ? String(videoUrl).split(/\r?\n|\|/)
+        : []
+    )
+      .map((v: any) => String(v || '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const primaryVideoUrl = cleanedVideoUrls[0] || '';
+    const driveFileId = primaryVideoUrl ? extractDriveFileId(primaryVideoUrl) : '';
 
     const newLecture: Lecture = {
       id: body.id || `lec-${Date.now()}`,
@@ -42,7 +54,8 @@ export async function POST(request: Request) {
       category: category || '프롬프트 & 업무활용',
       minViewRole,
       minDownloadRole,
-      videoUrl,
+      videoUrl: primaryVideoUrl,
+      videoUrls: cleanedVideoUrls,
       driveFileId,
       startTime: startTime || '',
       duration,
@@ -81,6 +94,7 @@ export async function PUT(request: Request) {
       minViewRole,
       minDownloadRole,
       videoUrl,
+      videoUrls,
       startTime,
       duration,
       materials = [],
@@ -91,7 +105,18 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: '강의 ID와 제목은 필수입니다.' }, { status: 400 });
     }
 
-    const driveFileId = videoUrl ? extractDriveFileId(videoUrl) : '';
+    const cleanedVideoUrls: string[] = (
+      Array.isArray(videoUrls)
+        ? videoUrls
+        : videoUrl
+        ? String(videoUrl).split(/\r?\n|\|/)
+        : []
+    )
+      .map((v: any) => String(v || '').trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const primaryVideoUrl = cleanedVideoUrls[0] || '';
+    const driveFileId = primaryVideoUrl ? extractDriveFileId(primaryVideoUrl) : '';
 
     const updatedData: Lecture = {
       id,
@@ -100,7 +125,8 @@ export async function PUT(request: Request) {
       category: category || '프롬프트 & 업무활용',
       minViewRole: minViewRole || 'guest',
       minDownloadRole: minDownloadRole || 'guest',
-      videoUrl: videoUrl || '',
+      videoUrl: primaryVideoUrl,
+      videoUrls: cleanedVideoUrls,
       driveFileId,
       startTime: startTime || '',
       duration: duration || '45분',

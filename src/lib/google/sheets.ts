@@ -596,7 +596,15 @@ export async function getLectures(): Promise<Lecture[]> {
           const category = String(c[2]?.v || '프롬프트 & 업무활용').trim();
           const minViewRole = (String(c[3]?.v || 'guest').trim() as any) || 'guest';
           const minDownloadRole = (String(c[4]?.v || 'guest').trim() as any) || 'guest';
-          const videoUrl = String(c[5]?.v || '').trim();
+          const rawVideoCell = String(c[5]?.v || '').trim();
+          const parsedVideoUrls = rawVideoCell
+            ? rawVideoCell
+                .split(/\r?\n|\|/)
+                .map((v) => v.trim())
+                .filter(Boolean)
+                .slice(0, 3)
+            : [];
+          const videoUrl = parsedVideoUrls[0] || '';
           const duration = String(c[6]?.v || '45분').trim();
           const createdAt = String(c[7]?.f || c[7]?.v || new Date().toISOString().split('T')[0]).trim();
           const description = String(c[8]?.v || '').trim();
@@ -616,6 +624,7 @@ export async function getLectures(): Promise<Lecture[]> {
             minViewRole,
             minDownloadRole,
             videoUrl,
+            videoUrls: parsedVideoUrls,
             driveFileId: videoUrl,
             duration,
             maxAttendees: !isNaN(maxAttendees) ? maxAttendees : 30,
@@ -680,6 +689,10 @@ export async function getLectures(): Promise<Lecture[]> {
         id: sItem.id,
         description: sItem.description || existing.description || `${existing.title} 강의실입니다.`,
         videoUrl: sItem.videoUrl || existing.videoUrl || '',
+        videoUrls:
+          sItem.videoUrls && sItem.videoUrls.length > 0
+            ? sItem.videoUrls
+            : existing.videoUrls || (existing.videoUrl ? [existing.videoUrl] : []),
         driveFileId: sItem.driveFileId || existing.driveFileId || sItem.videoUrl || existing.videoUrl || '',
         materials:
           sItem.materials && sItem.materials.length > 0
@@ -738,7 +751,10 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
             category: lecture.category,
             minViewRole: lecture.minViewRole,
             minDownloadRole: lecture.minDownloadRole,
-            videoUrl: lecture.videoUrl,
+            videoUrl:
+              lecture.videoUrls && lecture.videoUrls.length > 0
+                ? lecture.videoUrls.join('\n')
+                : lecture.videoUrl,
             duration: lecture.duration,
             maxAttendees: lecture.maxAttendees ?? 30,
             materials: JSON.stringify(lecture.materials || []),

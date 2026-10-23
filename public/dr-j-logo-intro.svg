@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- 배경 광원 효과 -->
+    <radialGradient id="bgFlare" cx="50%" cy="48%" r="45%">
+      <stop offset="0%" stop-color="#2563EB" stop-opacity="0.38" />
+      <stop offset="50%" stop-color="#0284C7" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- 수직 라이트 리본 그라데이션 -->
+    <linearGradient id="ribbonMain" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0" />
+      <stop offset="50%" stop-color="#4A85F6" stop-opacity="0.65" />
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- 뱃지 외곽 그라데이션 -->
+    <linearGradient id="badgeBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+
+    <!-- 뱃지 텍스트 그라데이션 -->
+    <linearGradient id="badgeText" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7DD3FC" />
+      <stop offset="55%" stop-color="#DBEAFE" />
+      <stop offset="100%" stop-color="#FFFFFF" />
+    </linearGradient>
+
+    <!-- 메인 타이틀 그라데이션 -->
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#A5B4FC" />
+    </linearGradient>
+
+    <filter id="glowStrong" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation="28" flood-color="#4A85F6" flood-opacity="0.85" />
+    </filter>
+
+    <filter id="titleGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="#4A85F6" flood-opacity="0.9" />
+      <feDropShadow dx="0" dy="0" stdDeviation="36" flood-color="#38BDF8" flood-opacity="0.55" />
+    </filter>
+  </defs>
+
+  <!-- 1. 블랙 배경 -->
+  <rect width="1200" height="630" fill="#000000" />
+  <rect width="1200" height="630" fill="url(#bgFlare)" />
+
+  <!-- 2. 수직 네온 리본 라인 -->
+  <g opacity="0.55">
+    <rect x="540" y="0" width="4" height="630" fill="url(#ribbonMain)" opacity="0.4" />
+    <rect x="570" y="0" width="5" height="630" fill="url(#ribbonMain)" opacity="0.65" />
+    <rect x="597" y="0" width="6" height="630" fill="url(#ribbonMain)" opacity="0.9" />
+    <rect x="625" y="0" width="5" height="630" fill="url(#ribbonMain)" opacity="0.65" />
+    <rect x="655" y="0" width="4" height="630" fill="url(#ribbonMain)" opacity="0.4" />
+  </g>
+
+  <!-- 3. 중앙 Dr. J 심볼 뱃지 -->
+  <g filter="url(#glowStrong)">
+    <rect x="516" y="140" width="168" height="168" rx="38" fill="url(#badgeBorder)" />
+    <rect x="520" y="144" width="160" height="160" rx="34" fill="#09090B" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="1.5" />
+    <text
+      x="600"
+      y="243"
+      text-anchor="middle"
+      font-family="'Pretendard', 'Inter', 'Arial Black', sans-serif"
+      font-size="52"
+      font-weight="900"
+      letter-spacing="-2"
+      fill="url(#badgeText)"
+    >Dr. J</text>
+  </g>
+
+  <!-- 4. 메인 타이틀 DR. J'S -->
+  <text
+    x="614"
+    y="425"
+    text-anchor="middle"
+    font-family="'Pretendard', 'Inter', 'Arial Black', sans-serif"
+    font-size="86"
+    font-weight="900"
+    letter-spacing="28"
+    fill="url(#titleGrad)"
+    filter="url(#titleGlow)"
+  >DR. J'S</text>
+
+  <!-- 5. 하단 시네마틱 서브타이틀 -->
+  <text
+    x="604"
+    y="565"
+    text-anchor="middle"
+    font-family="monospace"
+    font-size="14"
+    font-weight="600"
+    letter-spacing="8"
+    fill="#71717A"
+  >ORIGINAL COMMUNITY SERIES</text>
+</svg>

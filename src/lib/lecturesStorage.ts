@@ -118,6 +118,12 @@ export function mergeLectures(serverLectures: Lecture[]): Lecture[] {
         ...existing,
         id: l.id,
         videoUrl: existing.videoUrl || l.videoUrl || '',
+        videoUrls:
+          l.videoUrls && l.videoUrls.length > (existing.videoUrls?.length || 0)
+            ? l.videoUrls
+            : existing.videoUrls && existing.videoUrls.length > 0
+            ? existing.videoUrls
+            : l.videoUrls || [],
         driveFileId: existing.driveFileId || l.driveFileId || '',
         materials:
           l.materials && l.materials.length > (existing.materials?.length || 0)

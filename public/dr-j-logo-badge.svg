@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- 외곽 테두리 그라데이션 (blue-500 -> sky-400 -> indigo-600) -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="50%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+
+    <!-- 텍스트 그라데이션 (sky-300 -> blue-100 -> white) -->
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7DD3FC" />
+      <stop offset="55%" stop-color="#DBEAFE" />
+      <stop offset="100%" stop-color="#FFFFFF" />
+    </linearGradient>
+
+    <!-- 네온 블루 글로우 필터 -->
+    <filter id="blueGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="24" result="blur1" />
+      <feFlood flood-color="#4A85F6" flood-opacity="0.75" result="color1" />
+      <feComposite in="color1" in2="blur1" operator="in" result="glow1" />
+      <feMerge>
+        <feMergeNode in="glow1" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="textGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="14" flood-color="#4A85F6" flood-opacity="0.9" />
+    </filter>
+  </defs>
+
+  <!-- 배경 및 외곽 그라데이션 프레임 -->
+  <rect x="36" y="36" width="440" height="440" rx="96" fill="url(#borderGrad)" filter="url(#blueGlow)" />
+
+  <!-- 내부 블랙 카드 -->
+  <rect x="44" y="44" width="424" height="424" rx="88" fill="#09090B" stroke="#FFFFFF" stroke-opacity="0.2" stroke-width="2" />
+
+  <!-- 중앙 Dr. J 텍스트 -->
+  <text
+    x="256"
+    y="295"
+    text-anchor="middle"
+    font-family="'Pretendard', 'Inter', 'Arial Black', sans-serif"
+    font-size="128"
+    font-weight="900"
+    letter-spacing="-4"
+    fill="url(#textGrad)"
+    filter="url(#textGlow)"
+  >Dr. J</text>
+</svg>

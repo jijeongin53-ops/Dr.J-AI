@@ -173,6 +173,7 @@ export default function LectureDetailPage() {
           title={lecture.title}
           driveFileId={lecture.driveFileId}
           videoUrl={lecture.videoUrl}
+          videoUrls={lecture.videoUrls}
           minViewRole={lecture.minViewRole}
           userRole={currentUser?.role}
         />

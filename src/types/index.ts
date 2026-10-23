@@ -39,6 +39,7 @@ export interface Lecture {
   minViewRole: MemberRole; // 시청 가능한 최소 등급
   minDownloadRole: MemberRole; // 자료 다운로드 최소 등급
   videoUrl?: string; // 구글 드라이브 동영상 링크 or ID
+  videoUrls?: string[]; // 최대 3개까지 추가 가능한 동영상 링크 or ID 목록
   driveFileId?: string; // 구글 드라이브 비디오 파일 ID
   duration?: string; // 예: "45분"
   materials: LectureMaterial[]; // 첨부 강의자료 목록

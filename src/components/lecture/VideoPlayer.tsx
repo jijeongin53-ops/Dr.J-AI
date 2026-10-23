@@ -1,15 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MemberRole } from '@/types';
 import { hasRequiredRole, getDrivePreviewUrl } from '@/lib/google/drive';
-import { Lock, Play, ExternalLink } from 'lucide-react';
+import { Lock, Play, ExternalLink, Film } from 'lucide-react';
 import Link from 'next/link';
 
 interface VideoPlayerProps {
   title: string;
   driveFileId?: string;
   videoUrl?: string;
+  videoUrls?: string[];
   minViewRole: MemberRole;
   userRole?: MemberRole;
 }
@@ -18,11 +19,35 @@ export function VideoPlayer({
   title,
   driveFileId,
   videoUrl,
+  videoUrls,
   minViewRole,
   userRole,
 }: VideoPlayerProps) {
   const canView = hasRequiredRole(userRole, minViewRole);
-  const targetId = driveFileId || videoUrl;
+
+  // 최대 3개까지의 동영상 목록 구성
+  const resolvedVideos = (() => {
+    if (Array.isArray(videoUrls) && videoUrls.length > 0) {
+      const cleaned = videoUrls.map((v) => String(v || '').trim()).filter(Boolean).slice(0, 3);
+      if (cleaned.length > 0) return cleaned;
+    }
+    if (videoUrl && videoUrl.trim()) {
+      const split = videoUrl
+        .split(/\r?\n|\|/)
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      if (split.length > 0) return split;
+    }
+    if (driveFileId && driveFileId.trim()) {
+      return [driveFileId.trim()];
+    }
+    return [];
+  })();
+
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0);
+  const safeIndex = activeVideoIndex < resolvedVideos.length ? activeVideoIndex : 0;
+  const targetId = resolvedVideos[safeIndex] || '';
   const previewUrl = targetId ? getDrivePreviewUrl(targetId) : '';
 
   // 권한 부족 시 잠금 안내 화면
@@ -60,11 +85,38 @@ export function VideoPlayer({
   // 시청 권한이 있을 때 구글 드라이브 비디오 스트리밍 플레이어 임베드
   return (
     <div className="w-full rounded-2xl overflow-hidden border border-gray-200 bg-black shadow-lg">
+      {/* 다중 동영상(2~3개) 등록 시 상단 영상 선택 탭 */}
+      {resolvedVideos.length > 1 && (
+        <div className="px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs text-gray-300 font-semibold">
+            <Film className="w-3.5 h-3.5 text-carrot" />
+            <span>강의 영상 선택 ({resolvedVideos.length}개):</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {resolvedVideos.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setActiveVideoIndex(idx)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                  safeIndex === idx
+                    ? 'bg-carrot text-white shadow-xs'
+                    : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                }`}
+              >
+                영상 #{idx + 1}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="w-full aspect-video relative bg-black">
         {previewUrl ? (
           <iframe
+            key={previewUrl}
             src={previewUrl}
-            title={title}
+            title={`${title} - 영상 #${safeIndex + 1}`}
             className="w-full h-full border-0"
             allow="autoplay; encrypted-media; fullscreen"
             allowFullScreen
@@ -81,7 +133,10 @@ export function VideoPlayer({
       <div className="px-4 py-3 bg-white border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          <span className="text-gray-700 font-medium">실시간 고화질 스트리밍 지원</span>
+          <span className="text-gray-700 font-medium">
+            실시간 고화질 스트리밍 지원
+            {resolvedVideos.length > 1 ? ` (현재 영상 #${safeIndex + 1} / 총 ${resolvedVideos.length}개)` : ''}
+          </span>
         </div>
         {previewUrl && (
           <a
