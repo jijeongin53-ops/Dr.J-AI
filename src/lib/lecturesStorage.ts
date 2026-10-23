@@ -98,33 +98,25 @@ export function mergeLectures(serverLectures: Lecture[]): Lecture[] {
   const local = getStoredLectures();
   const deletedSet = new Set(getDeletedLectureIds());
   const map = new Map<string, Lecture>();
-  const seenKeyToId = new Map<string, string>(); // (title + description) -> id 매핑 (중복 방지)
-
-  const makeKey = (lec: Lecture) =>
-    `${(lec.title || '').trim()}||${(lec.description || '').trim()}`;
 
   // 서버 데이터를 먼저 기준(표준 ID)으로 등록하여 모든 브라우저/회원이 동일한 lecture.id를 공유하도록 보장
   for (const s of serverLectures) {
     if (deletedSet.has(s.id)) continue;
     map.set(s.id, s);
-    seenKeyToId.set(makeKey(s), s.id);
   }
 
-  // 로컬 데이터를 병합 (제목과 설명이 모두 같거나 ID가 같으면 서버 표준 ID를 유지하면서 누락된 영상/자료 필드만 보완)
+  // 로컬 데이터를 병합 (각 강의의 고유 ID를 유지하여 새로 개설한 강의가 과거 강의 ID와 섞이지 않도록 보장)
   for (const l of local) {
     if (deletedSet.has(l.id)) continue;
-    const existingIdByKey = seenKeyToId.get(makeKey(l));
-    const targetId = map.has(l.id) ? l.id : existingIdByKey;
 
-    if (!targetId) {
+    if (!map.has(l.id)) {
       map.set(l.id, l);
-      seenKeyToId.set(makeKey(l), l.id);
     } else {
-      const existing = map.get(targetId)!;
-      map.set(targetId, {
+      const existing = map.get(l.id)!;
+      map.set(l.id, {
         ...l,
         ...existing,
-        id: targetId,
+        id: l.id,
         videoUrl: existing.videoUrl || l.videoUrl || '',
         driveFileId: existing.driveFileId || l.driveFileId || '',
         materials:

@@ -326,6 +326,36 @@ export async function manualUpdateAttendance(
 }
 
 /**
+ * 회원 동일성 비교 헬퍼 (빈 문자열 매칭이나 시트 행 인덱스 ID 밀림으로 인한 오매칭 방지)
+ */
+function isSameAttendanceUser(
+  a: { userId?: string; id?: string; userName?: string; name?: string; phoneNumber?: string },
+  b: { userId?: string; id?: string; userName?: string; name?: string; phoneNumber?: string }
+): boolean {
+  const aName = (a.userName || a.name || '').trim();
+  const bName = (b.userName || b.name || '').trim();
+  const aPhone = (a.phoneNumber || '').replace(/\D/g, '');
+  const bPhone = (b.phoneNumber || '').replace(/\D/g, '');
+
+  if (aName && bName) {
+    if (aName !== bName) return false;
+    if (aPhone && bPhone && aPhone.length >= 4 && bPhone.length >= 4) {
+      return aPhone.slice(-4) === bPhone.slice(-4);
+    }
+    return true;
+  }
+
+  const aId = (a.userId || a.id || '').trim();
+  const bId = (b.userId || b.id || '').trim();
+  if (aId && bId && !aId.startsWith('sheet_user_') && !bId.startsWith('sheet_user_') && aId === bId) {
+    return true;
+  }
+
+  if (aPhone && bPhone && aPhone.length >= 8 && aPhone === bPhone) return true;
+  return false;
+}
+
+/**
  * 특정 세션의 전체 출석 명부 조회 (전체 등록 회원 대비 출석/미출석 매핑)
  */
 export function getSessionAttendanceRoster(
@@ -345,24 +375,28 @@ export function getSessionAttendanceRoster(
     attendanceRate: number;
   };
 } {
-  const session = sessions.find((s) => s.id === sessionId) || activeSession;
-  const currentRecords = attendanceRecords.filter((r) => r.sessionId === sessionId || sessionId === 'default');
+  const session =
+    sessionId && sessionId !== 'default'
+      ? sessions.find((s) => s.id === sessionId) || activeSession
+      : activeSession;
+
+  // 최초 출석 체크 시작 전(activeSession이 없고 sessionId === 'default'인 상태)에는 과거 기록을 불러오지 않음
+  const targetSessionId = session ? session.id : sessionId !== 'default' ? sessionId : null;
+  const currentRecords = targetSessionId
+    ? attendanceRecords.filter((r) => r.sessionId === targetSessionId)
+    : [];
   const roomCheckedUsers = getAllRoomCheckedInUsers();
 
   const roster = allUsers.map((user) => {
-    let record = currentRecords.find(
-      (r) => r.userId === user.id || r.userName === user.name || r.phoneNumber === user.phoneNumber
-    );
+    let record = currentRecords.find((r) => isSameAttendanceUser(r, user));
 
-    // 강의실 4자리 출석 인증 완료자도 명부에 출석 완료로 연동
+    // 강의실 4자리 출석 인증 완료자도 명부에 출석 완료로 연동 (현재 진행 중인 출석 세션만)
     if (!record) {
-      const roomCheck = roomCheckedUsers.find(
-        (u) => u.userId === user.id || u.userName === user.name || u.phoneNumber === user.phoneNumber
-      );
+      const roomCheck = roomCheckedUsers.find((u) => isSameAttendanceUser(u, user));
       if (roomCheck) {
         record = {
           id: `room_rec_${roomCheck.userId}`,
-          sessionId,
+          sessionId: targetSessionId || roomCheck.lectureId,
           userId: user.id,
           userName: user.name,
           phoneNumber: user.phoneNumber,

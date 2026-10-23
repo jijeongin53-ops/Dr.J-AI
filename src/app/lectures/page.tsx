@@ -43,7 +43,7 @@ export default function LecturesPage() {
                     await fetch('/api/lectures', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(lec),
+                      body: JSON.stringify({ ...lec, isNewUpload: false }),
                     });
                   } catch {}
                 }

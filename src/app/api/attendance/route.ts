@@ -51,11 +51,13 @@ export async function GET(request: Request) {
     );
     const room = getOrCreateRoom(lecture.id);
     const checkedInUser = room.attendance?.checkedInUsers.find((u) => {
-      if (userId && u.userId === userId) return true;
-      if (userName && u.userName === userName) return true;
-      if (cleanPhone) {
+      if (userName && u.userName) {
+        return u.userName.trim() === userName.trim();
+      }
+      if (userId && !userId.startsWith('sheet_user_') && u.userId === userId) return true;
+      if (cleanPhone && cleanPhone.length >= 8) {
         const uPhoneClean = (u.phoneNumber || '').replace(/\D/g, '');
-        if (uPhoneClean === cleanPhone || (cleanPhone.length >= 4 && uPhoneClean.endsWith(cleanPhone.slice(-4)))) {
+        if (uPhoneClean === cleanPhone) {
           return true;
         }
       }

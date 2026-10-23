@@ -40,13 +40,9 @@ export default function LectureDetailPage() {
     const rawStored = getStoredLectures();
     const rawMatchedById = rawStored.find((l) => l.id === lectureId);
 
-    // 로컬스토리지 병합 데이터에서 먼저 조회
+    // 로컬스토리지 병합 데이터에서 먼저 조회 (동일 제목의 과거 강의실 ID로 덮어씌워지는 오류 방지를 위해 정확히 ID로만 매칭)
     const localLectures = mergeLectures(initialLectures);
-    const localFound =
-      localLectures.find((l) => l.id === lectureId) ||
-      (rawMatchedById
-        ? localLectures.find((l) => l.title.trim() === rawMatchedById.title.trim())
-        : undefined);
+    const localFound = localLectures.find((l) => l.id === lectureId) || rawMatchedById;
     if (localFound) {
       setLecture(localFound);
       setLoading(false);
@@ -57,11 +53,7 @@ export default function LectureDetailPage() {
       .then((res) => res.json())
       .then((data) => {
         const merged = mergeLectures(data.lectures || initialLectures);
-        const found =
-          merged.find((l: Lecture) => l.id === lectureId) ||
-          (rawMatchedById
-            ? merged.find((l: Lecture) => l.title.trim() === rawMatchedById.title.trim())
-            : undefined);
+        const found = merged.find((l: Lecture) => l.id === lectureId) || rawMatchedById;
         if (found) setLecture(found);
       })
       .catch(() => {

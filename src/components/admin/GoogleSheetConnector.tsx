@@ -354,7 +354,7 @@ function doPost(e) {
       ];
       var updatedLec = false;
       for (var lr = 1; lr < lRows.length; lr++) {
-        if (String(lRows[lr][0] || "").trim() === targetId || String(lRows[lr][1] || "").trim() === targetTitle) {
+        if (String(lRows[lr][0] || "").trim() === targetId) {
           lecSheet.getRange(lr + 1, 1, 1, rowValues.length).setValues([rowValues]);
           updatedLec = true;
           break;

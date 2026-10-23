@@ -36,12 +36,14 @@ export interface RoomEvent {
   type:
     | 'enter'
     | 'leave'
+    | 'resetRoom'
     | 'updateMaxAttendees'
     | 'updateStartTime'
     | 'startAttendance'
     | 'stopAttendance'
     | 'checkInAttendance';
   timestamp: number;
+  isManualEnter?: boolean;
   user?: MemberUser;
   userId?: string;
   userName?: string;
@@ -70,17 +72,27 @@ function isSameRoomUser(
   a: { id?: string; userId?: string; name?: string; userName?: string; phoneNumber?: string },
   b: { id?: string; userId?: string; name?: string; userName?: string; phoneNumber?: string }
 ): boolean {
-  const aId = (a.id || a.userId || '').trim();
-  const bId = (b.id || b.userId || '').trim();
-  if (aId && bId && aId === bId) return true;
-
   const aName = (a.name || a.userName || '').trim();
   const bName = (b.name || b.userName || '').trim();
-  if (aName && bName && aName === bName) return true;
-
   const aPhone = cleanPhoneDigits(a.phoneNumber);
   const bPhone = cleanPhoneDigits(b.phoneNumber);
-  if (aPhone && bPhone && aPhone === bPhone) return true;
+
+  // 이름이 둘 다 존재할 때는 이름이 일치해야 동일 회원으로 판단 (시트 행 번호 기반 ID 밀림 방지)
+  if (aName && bName) {
+    if (aName !== bName) return false;
+    if (aPhone && bPhone && aPhone.length >= 4 && bPhone.length >= 4) {
+      return aPhone.slice(-4) === bPhone.slice(-4);
+    }
+    return true;
+  }
+
+  const aId = (a.id || a.userId || '').trim();
+  const bId = (b.id || b.userId || '').trim();
+  if (aId && bId && !aId.startsWith('sheet_user_') && !bId.startsWith('sheet_user_') && aId === bId) {
+    return true;
+  }
+
+  if (aPhone && bPhone && aPhone.length >= 8 && aPhone === bPhone) return true;
 
   return false;
 }
@@ -102,7 +114,23 @@ async function appendRoomEvent(event: RoomEvent): Promise<void> {
 }
 
 function applyRoomEventToState(room: RoomState, ev: RoomEvent): void {
+  if (ev.type === 'resetRoom') {
+    room.activeMembers = [];
+    room.waitingMembers = [];
+    room.attendance = null;
+    if (typeof ev.maxAttendees === 'number' && ev.maxAttendees >= 0) {
+      room.maxAttendees = ev.maxAttendees;
+    }
+    room.lastUpdated = ev.timestamp || Date.now();
+    return;
+  }
+
   if (ev.type === 'enter' && ev.user) {
+    // 과거 버전에서 페이지 조회 시 자동 발송되던 비정상 입장 이벤트 무시 (명시적으로 입장 버튼을 누른 이벤트만 반영)
+    if (!ev.isManualEnter) {
+      return;
+    }
+
     const user = ev.user;
     if (typeof ev.maxAttendees === 'number' && ev.maxAttendees >= 0 && room.activeMembers.length === 0) {
       room.maxAttendees = ev.maxAttendees;
@@ -191,6 +219,10 @@ function applyRoomEventToState(room: RoomState, ev: RoomEvent): void {
   }
 
   if (ev.type === 'checkInAttendance' && ev.checkedUser) {
+    // 출석 체크 세션이 개설된 이후에만 출석 및 자동 입장을 반영 (최초 출석 체크 전 유입 방지)
+    if (!room.attendance) {
+      return;
+    }
     const cu = ev.checkedUser;
     // 출석 체크한 회원이 아직 activeMembers에 없으면 자동 등록
     if (!room.activeMembers.some((u) => isSameRoomUser(u, cu))) {
@@ -207,11 +239,9 @@ function applyRoomEventToState(room: RoomState, ev: RoomEvent): void {
         joinedAt: '',
       });
     }
-    if (room.attendance) {
-      const already = room.attendance.checkedInUsers.some((u) => isSameRoomUser(u, cu));
-      if (!already) {
-        room.attendance.checkedInUsers.push(cu);
-      }
+    const already = room.attendance.checkedInUsers.some((u) => isSameRoomUser(u, cu));
+    if (!already) {
+      room.attendance.checkedInUsers.push(cu);
     }
     room.lastUpdated = ev.timestamp || Date.now();
   }
@@ -381,6 +411,7 @@ export async function enterLectureRoom(
     lectureId,
     type: 'enter',
     timestamp: Date.now(),
+    isManualEnter: true,
     user,
     maxAttendees,
   };
@@ -400,6 +431,30 @@ export async function enterLectureRoom(
     room,
     alreadyEntered: false,
   };
+}
+
+/**
+ * 강의실 신규 개설 또는 관리자 초기화 시 입장/대기/출석 상태 완전 초기화
+ */
+export async function resetLectureRoom(
+  lectureId: string,
+  maxAttendees?: number
+): Promise<RoomState> {
+  await syncAllRoomsFromSheet(true);
+  const room = getOrCreateRoom(lectureId, maxAttendees ?? 30);
+
+  const event: RoomEvent = {
+    eventId: `re_reset_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'resetRoom',
+    timestamp: Date.now(),
+    maxAttendees: typeof maxAttendees === 'number' ? maxAttendees : room.maxAttendees,
+  };
+
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
+
+  return room;
 }
 
 /**
@@ -559,7 +614,24 @@ export async function checkInRoomAttendance(
   await syncAllRoomsFromSheet(true);
   const room = getOrCreateRoom(lectureId);
 
-  // 1. 강의실 입장 여부 확인 (정원 여유가 있으면 자동 입장 처리하여 편의성 보장)
+  // 1. 진행 중인 출석 체크 세션 먼저 확인 (최초 출석 체크 시작 전에는 유입 차단)
+  if (!room.attendance || !room.attendance.isActive) {
+    return {
+      success: false,
+      message: '현재 진행 중인 실시간 출석 체크가 없거나 이미 마감되었습니다.',
+    };
+  }
+
+  // 2. 4자리 출석 번호 일치 검증
+  const cleanInput = inputCode.trim().replace(/\D/g, '');
+  if (cleanInput !== room.attendance.code) {
+    return {
+      success: false,
+      message: '출석 번호가 일치하지 않습니다. 관리자가 안내한 4자리 숫자를 확인해주세요.',
+    };
+  }
+
+  // 3. 강의실 입장 여부 확인 (정원 여유가 있으면 자동 입장 처리하여 편의성 보장)
   let isEntered = room.activeMembers.some((u) => isSameRoomUser(u, user));
   if (!isEntered) {
     if (room.maxAttendees === 0 || room.activeMembers.length < room.maxAttendees || user.role === 'admin' || user.name === '지정인') {
@@ -568,6 +640,7 @@ export async function checkInRoomAttendance(
         lectureId,
         type: 'enter',
         timestamp: Date.now(),
+        isManualEnter: true,
         user,
       };
       applyRoomEventToState(room, enterEv);
@@ -579,23 +652,6 @@ export async function checkInRoomAttendance(
         message: '출석 체크는 해당 강의실에 정상 입장한 회원만 가능합니다.',
       };
     }
-  }
-
-  // 2. 진행 중인 출석 체크 세션 확인
-  if (!room.attendance || !room.attendance.isActive) {
-    return {
-      success: false,
-      message: '현재 진행 중인 실시간 출석 체크가 없거나 이미 마감되었습니다.',
-    };
-  }
-
-  // 3. 4자리 출석 번호 일치 검증
-  const cleanInput = inputCode.trim().replace(/\D/g, '');
-  if (cleanInput !== room.attendance.code) {
-    return {
-      success: false,
-      message: '출석 번호가 일치하지 않습니다. 관리자가 안내한 4자리 숫자를 확인해주세요.',
-    };
   }
 
   // 4. 이미 출석 체크했는지 확인
@@ -774,7 +830,8 @@ export function getAllRoomCheckedInUsers(): Array<{
   }> = [];
 
   roomStates.forEach((room, lectureId) => {
-    if (room.attendance && Array.isArray(room.attendance.checkedInUsers)) {
+    // 현재 실시간 출석 체크가 진행 중인(isActive === true) 강의실의 출석 완료자만 명부에 반영
+    if (room.attendance && room.attendance.isActive && Array.isArray(room.attendance.checkedInUsers)) {
       for (const u of room.attendance.checkedInUsers) {
         list.push({
           lectureId,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getLectures, addLecture, updateLecture, deleteLecture } from '@/lib/google/sheets';
 import { Lecture } from '@/types';
 import { extractDriveFileId } from '@/lib/google/drive';
+import { resetLectureRoom } from '@/lib/lectureRoom';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,9 @@ export async function POST(request: Request) {
     };
 
     const saved = await addLecture(newLecture);
+    if (body.isNewUpload !== false) {
+      await resetLectureRoom(saved.id, saved.maxAttendees);
+    }
     return NextResponse.json({ lecture: saved, message: '강의 및 자료가 성공적으로 등록되었습니다.' });
   } catch (error) {
     return NextResponse.json({ error: '강의 등록 중 오류가 발생했습니다.' }, { status: 500 });

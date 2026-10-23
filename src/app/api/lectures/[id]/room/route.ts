@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import {
   enterLectureRoom,
   leaveLectureRoom,
+  resetLectureRoom,
   getMemberRoomStatus,
   setRoomMaxAttendees,
   setRoomStartTime,
@@ -169,6 +170,22 @@ export async function POST(
         return NextResponse.json({ error: result.message }, { status: 400 });
       }
       return NextResponse.json(result);
+    }
+
+    // 8. 관리자: 강의실 입장/대기/출석 상태 초기화
+    if (action === 'resetRoom') {
+      const room = await resetLectureRoom(lectureId, typeof maxAttendees === 'number' ? maxAttendees : undefined);
+      return NextResponse.json({
+        success: true,
+        room: {
+          activeCount: room.activeMembers.length,
+          waitingCount: room.waitingMembers.length,
+          maxAttendees: room.maxAttendees,
+          activeMembers: room.activeMembers,
+          waitingMembers: room.waitingMembers,
+        },
+        message: '강의실 입장 및 출석 현황이 초기화되었습니다.',
+      });
     }
 
     return NextResponse.json({ error: '유효하지 않은 요청 액션입니다.' }, { status: 400 });

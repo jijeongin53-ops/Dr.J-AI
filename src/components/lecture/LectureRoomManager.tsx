@@ -90,7 +90,6 @@ export function LectureRoomManager({
 
   // 입장/퇴장/출석 액션 중 이전 폴링 응답이 상태를 덮어쓰지 않도록 시퀀스 추적
   const mutationSeqRef = useRef(0);
-  const autoEnteredUserKeyRef = useRef<string>('');
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.name === '지정인';
 
@@ -148,8 +147,8 @@ export function LectureRoomManager({
             setShowAttendeeModal(false);
           } else {
             setCheckedIn(false);
-            if (!isAdmin && currentUser && (data.myStatus === 'entered' || data.activeCount < data.maxAttendees || data.maxAttendees === 0)) {
-              // 아직 출석 전이고, 이 세션을 닫지 않았다면 자동으로 참석자 모달 오픈
+            if (!isAdmin && currentUser && data.myStatus === 'entered') {
+              // 아직 출석 전이고, 강의실에 정식 입장한 상태이며 이 세션을 닫지 않았다면 자동으로 참석자 모달 오픈
               if (attendeeDismissedSessionId !== data.attendance.sessionId && !attendeeSuccess) {
                 setShowAttendeeModal(true);
               }
@@ -194,14 +193,7 @@ export function LectureRoomManager({
     return () => clearInterval(interval);
   }, [lectureId, currentUser?.id, currentUser?.name, isAdmin, attendeeDismissedSessionId, attendeeSuccess]);
 
-  // 페이지 진입 시 로그인 회원 자동 입장 시도
-  useEffect(() => {
-    const userKey = currentUser ? `${lectureId}_${currentUser.id || currentUser.name}` : '';
-    if (currentUser && userKey && autoEnteredUserKeyRef.current !== userKey) {
-      autoEnteredUserKeyRef.current = userKey;
-      handleEnter();
-    }
-  }, [lectureId, currentUser?.id, currentUser?.name]);
+  // 페이지 진입 시 로그인 회원 자동 입장 시도 (비활성화: 회원이 직접 '강의실 입장하기' 버튼을 클릭할 때만 입장 처리)
 
   // 강의실 입장
   const handleEnter = async () => {
@@ -489,10 +481,46 @@ export function LectureRoomManager({
     }
 
     if (myStatus !== 'entered') {
-      await handleEnter();
+      alert('먼저 상단의 [강의실 입장하기] 버튼을 눌러 강의실에 입장해 주세요.');
+      return;
     }
 
     setShowAttendeeModal(true);
+  };
+
+  // 관리자: 강의실 입장/출석 인원 초기화
+  const handleResetRoom = async () => {
+    if (!isAdmin) return;
+    if (!confirm('현재 강의실의 입장 인원 및 출석 현황을 0명으로 초기화하시겠습니까?')) {
+      return;
+    }
+    mutationSeqRef.current += 1;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/lectures/${lectureId}/room`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'resetRoom',
+          maxAttendees: currentMax,
+        }),
+      });
+      mutationSeqRef.current += 1;
+      if (res.ok) {
+        setActiveCount(0);
+        setWaitingCount(0);
+        setActiveMembers([]);
+        setWaitingMembers([]);
+        setMyStatus('none');
+        setQueuePosition(0);
+        setRoomAttendance(null);
+        setCheckedIn(false);
+        fetchRoomStatus();
+      }
+    } catch (_) {
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const copyCodeToClipboard = () => {
@@ -589,13 +617,23 @@ export function LectureRoomManager({
 
           {/* 관리자 정원 변경 버튼 */}
           {isAdmin && (
-            <button
-              onClick={() => setIsUpdatingMax(!isUpdatingMax)}
-              className="p-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-500 transition"
-              title="강의실 정원 변경"
-            >
-              <Settings className="w-4 h-4 text-gray-700" />
-            </button>
+            <>
+              <button
+                onClick={handleResetRoom}
+                disabled={actionLoading}
+                className="px-2.5 py-1.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:border-red-200 text-gray-600 hover:text-red-600 text-xs font-semibold transition"
+                title="입장 인원 및 출석 현황 초기화"
+              >
+                입장 초기화
+              </button>
+              <button
+                onClick={() => setIsUpdatingMax(!isUpdatingMax)}
+                className="p-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-500 transition"
+                title="강의실 정원 변경"
+              >
+                <Settings className="w-4 h-4 text-gray-700" />
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -746,16 +784,16 @@ export function LectureRoomManager({
               ) : (
                 <button
                   onClick={handleCheckIn}
-                  disabled={actionLoading || !currentUser || myStatus === 'waiting' || !roomAttendance?.isActive}
+                  disabled={actionLoading || !currentUser || myStatus !== 'entered' || !roomAttendance?.isActive}
                   className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm ${
-                    roomAttendance?.isActive && currentUser && myStatus !== 'waiting'
+                    roomAttendance?.isActive && currentUser && myStatus === 'entered'
                       ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300'
                   }`}
                   title={
                     !roomAttendance?.isActive
                       ? '관리자가 출석 체크를 시작할 때까지 대기해주세요'
-                      : myStatus !== 'waiting'
+                      : myStatus === 'entered'
                       ? '4자리 출석 번호 입력하기'
                       : '강의실 입장 회원만 출석 가능'
                   }
@@ -764,7 +802,7 @@ export function LectureRoomManager({
                   <span>
                     {!roomAttendance?.isActive
                       ? '출석 대기 중'
-                      : myStatus !== 'waiting'
+                      : myStatus === 'entered'
                       ? '4자리 번호 입력하기'
                       : '입장 회원만 출석 가능'}
                   </span>
