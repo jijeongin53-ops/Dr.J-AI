@@ -1,10 +1,24 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { MemberUser, MemberRole, MemberStatus } from '@/types';
+import { MemberUser, MemberRole, MemberStatus, ROLE_HIERARCHY } from '@/types';
 import { getCurrentUser, setCurrentUser } from '@/lib/auth';
 import { RoleBadge } from '../common/RoleBadge';
-import { UserCheck, RefreshCw, CheckCircle2, AlertCircle, X, Mail, AlertTriangle } from 'lucide-react';
+import {
+  UserCheck,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Mail,
+  AlertTriangle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
+
+type SortField = 'name' | 'job' | 'joinedAt' | 'role' | 'status';
+type SortOrder = 'asc' | 'desc';
 
 interface MemberManagerProps {
   initialUsers: MemberUser[];
@@ -19,6 +33,64 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
   // 반려/거절 사유 작성 모달 상태
   const [rejectModalUser, setRejectModalUser] = useState<MemberUser | null>(null);
   const [rejectReason, setRejectReason] = useState('당근 모임 정회원 확인이 필요합니다.');
+
+  // 각 항목별 정렬 상태 (회원 정보 가나다순, 직업/생년월일, 가입일, 현재 등급, 승인 상태)
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 opacity-70" />;
+    }
+    return sortOrder === 'asc' ? (
+      <ArrowUp className="w-3.5 h-3.5 text-carrot" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-carrot" />
+    );
+  };
+
+  // 정렬이 적용된 회원 목록 계산
+  const sortedUsers = [...users].sort((a, b) => {
+    const dir = sortOrder === 'asc' ? 1 : -1;
+
+    if (sortField === 'name') {
+      const cmp = (a.name || '').localeCompare(b.name || '', 'ko');
+      if (cmp !== 0) return cmp * dir;
+    } else if (sortField === 'job') {
+      const cmp = (a.job || '').localeCompare(b.job || '', 'ko');
+      if (cmp !== 0) return cmp * dir;
+      const birthCmp = (a.birthDate || '').localeCompare(b.birthDate || '');
+      if (birthCmp !== 0) return birthCmp * dir;
+    } else if (sortField === 'joinedAt') {
+      const cmp = (a.joinedAt || '').localeCompare(b.joinedAt || '');
+      if (cmp !== 0) return cmp * dir;
+    } else if (sortField === 'role') {
+      const rankA = ROLE_HIERARCHY[a.role] ?? 0;
+      const rankB = ROLE_HIERARCHY[b.role] ?? 0;
+      if (rankA !== rankB) return (rankA - rankB) * dir;
+    } else if (sortField === 'status') {
+      const statusWeight: Record<string, number> = {
+        pending: 1,
+        approved: 2,
+        rejected: 3,
+        blocked: 4,
+      };
+      const weightA = statusWeight[a.status] ?? 99;
+      const weightB = statusWeight[b.status] ?? 99;
+      if (weightA !== weightB) return (weightA - weightB) * dir;
+    }
+
+    return (a.name || '').localeCompare(b.name || '', 'ko');
+  });
 
   // 부모 컴포넌트의 initialUsers 변경 시 동기화
   useEffect(() => {
@@ -137,25 +209,80 @@ export function MemberManager({ initialUsers }: MemberManagerProps) {
       {/* 회원 목록 테이블 */}
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="w-full text-left text-xs text-gray-700">
-          <thead className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 uppercase">
+          <thead className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 uppercase select-none">
             <tr>
-              <th className="py-3 px-4">회원 정보 (성명/연락처)</th>
-              <th className="py-3 px-4">직업 / 생년월일</th>
-              <th className="py-3 px-4">가입일</th>
-              <th className="py-3 px-4">현재 등급</th>
-              <th className="py-3 px-4">승인 상태</th>
+              <th
+                onClick={() => handleSort('name')}
+                className="py-3 px-4 cursor-pointer hover:bg-gray-100 hover:text-gray-900 transition"
+                title="성명 가나다순 오름차순/내림차순 정렬"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === 'name' ? 'text-carrot font-extrabold' : ''}>
+                    회원 정보 (성명/연락처)
+                  </span>
+                  {renderSortIcon('name')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('job')}
+                className="py-3 px-4 cursor-pointer hover:bg-gray-100 hover:text-gray-900 transition"
+                title="직업/생년월일 오름차순/내림차순 정렬"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === 'job' ? 'text-carrot font-extrabold' : ''}>
+                    직업 / 생년월일
+                  </span>
+                  {renderSortIcon('job')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('joinedAt')}
+                className="py-3 px-4 cursor-pointer hover:bg-gray-100 hover:text-gray-900 transition"
+                title="가입일 오름차순/내림차순 정렬"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === 'joinedAt' ? 'text-carrot font-extrabold' : ''}>
+                    가입일
+                  </span>
+                  {renderSortIcon('joinedAt')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('role')}
+                className="py-3 px-4 cursor-pointer hover:bg-gray-100 hover:text-gray-900 transition"
+                title="현재 등급순 오름차순/내림차순 정렬"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === 'role' ? 'text-carrot font-extrabold' : ''}>
+                    현재 등급
+                  </span>
+                  {renderSortIcon('role')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('status')}
+                className="py-3 px-4 cursor-pointer hover:bg-gray-100 hover:text-gray-900 transition"
+                title="승인 상태순 오름차순/내림차순 정렬"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className={sortField === 'status' ? 'text-carrot font-extrabold' : ''}>
+                    승인 상태
+                  </span>
+                  {renderSortIcon('status')}
+                </div>
+              </th>
               <th className="py-3 px-4 text-right">등급 변경 및 승인 조정</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {users.length === 0 ? (
+            {sortedUsers.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-gray-400 text-xs">
                   등록된 회원이 없습니다.
                 </td>
               </tr>
             ) : (
-              users.map((u) => {
+              sortedUsers.map((u) => {
                 const isPending = u.status === 'pending';
                 const isLoading = loadingId === u.id;
                 const isFeedback = feedbackMsg?.id === u.id;

@@ -9,7 +9,12 @@ import {
   getSessionAttendanceRoster,
 } from '@/lib/attendance';
 import { getUsers, getLectures } from '@/lib/google/sheets';
-import { getMemberRoomStatus, getOrCreateRoom, syncAllRoomsFromSheet } from '@/lib/lectureRoom';
+import {
+  getMemberRoomStatus,
+  getOrCreateRoom,
+  syncAllRoomsFromSheet,
+  manualToggleRoomAttendance,
+} from '@/lib/lectureRoom';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,11 +79,18 @@ export async function GET(request: Request) {
       isWaiting: roomStatus.myStatus === 'waiting',
       queuePosition: roomStatus.queuePosition,
       activeCount: roomStatus.activeCount,
+      waitingCount: roomStatus.waitingCount,
       maxAttendees: roomStatus.maxAttendees,
       hasCheckedIn: !!checkedInUser,
       checkedAt: checkedInUser?.checkedAt,
       attendanceActive: !!roomStatus.attendance?.isActive,
       attendanceTitle: roomStatus.attendance?.title,
+      attendanceCode: room.attendance?.code,
+      attendanceStartedAt: room.attendance?.startedAt,
+      checkedInCount: room.attendance?.checkedInUsers?.length || 0,
+      checkedInUsers: room.attendance?.checkedInUsers || [],
+      activeMembers: room.activeMembers || [],
+      waitingMembers: room.waitingMembers || [],
     };
   });
 
@@ -137,7 +149,10 @@ export async function POST(request: Request) {
       if (!targetUser) {
         return NextResponse.json({ error: '해당 회원을 찾을 수 없습니다.' }, { status: 404 });
       }
-      const record = await manualUpdateAttendance(sessionId || 'default', targetUser, status || 'present');
+      if (lectureId) {
+        await manualToggleRoomAttendance(lectureId, targetUser, (status || 'present') === 'present');
+      }
+      const record = await manualUpdateAttendance(sessionId || lectureId || 'default', targetUser, status || 'present');
       return NextResponse.json({ success: true, record });
     }
 

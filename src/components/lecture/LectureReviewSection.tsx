@@ -43,8 +43,19 @@ export function LectureReviewSection({
 
   useEffect(() => {
     fetchReviews();
-    const interval = setInterval(fetchReviews, 5000);
-    return () => clearInterval(interval);
+    // 20초 주기로 완화 및 백그라운드 탭 일시정지 (Vercel CPU 절감)
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchReviews();
+    }, 20000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchReviews();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [lectureId]);
 
   // 후기 제출

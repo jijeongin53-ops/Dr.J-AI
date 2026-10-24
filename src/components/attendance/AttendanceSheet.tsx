@@ -22,6 +22,8 @@ import {
   KeyRound,
   X,
   Sparkles,
+  ArrowLeft,
+  UserCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { GOOGLE_SHEET_URL } from '@/lib/constants';
@@ -41,11 +43,24 @@ interface MyRoomAttendance {
   isWaiting: boolean;
   queuePosition?: number;
   activeCount: number;
+  waitingCount?: number;
   maxAttendees: number;
   hasCheckedIn: boolean;
   checkedAt?: string;
   attendanceActive: boolean;
   attendanceTitle?: string;
+  attendanceCode?: string;
+  attendanceStartedAt?: string;
+  checkedInCount?: number;
+  checkedInUsers?: Array<{
+    userId: string;
+    userName: string;
+    phoneNumber: string;
+    role: any;
+    checkedAt: string;
+  }>;
+  activeMembers?: MemberUser[];
+  waitingMembers?: MemberUser[];
 }
 
 export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
@@ -75,7 +90,11 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
   const [checkingInRoomId, setCheckingInRoomId] = useState<string | null>(null);
   const [checkInCode, setCheckInCode] = useState('');
   const [checkingIn, setCheckingIn] = useState(false);
-  const [adminTab, setAdminTab] = useState<'roster' | 'rooms'>('roster');
+  // 관리자 모드에서도 강의별 그리드('rooms')가 기본으로 보이도록 설정
+  const [adminTab, setAdminTab] = useState<'roster' | 'rooms'>('rooms');
+  // 관리자가 그리드에서 특정 강의를 클릭했을 때 해당 강의의 출석 인원을 보여주는 상태
+  const [selectedAdminLectureId, setSelectedAdminLectureId] = useState<string | null>(null);
+  const [lectureRosterFilter, setLectureRosterFilter] = useState<'present' | 'entered' | 'all'>('present');
 
   const isAdmin =
     currentUser?.role === 'admin' ||
@@ -104,9 +123,19 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
 
   useEffect(() => {
     fetchAttendance();
-    // 5초 간격으로 출석부 자동 갱신
-    const interval = setInterval(fetchAttendance, 5000);
-    return () => clearInterval(interval);
+    // 5초 간격으로 출석부 자동 갱신 -> 15초 주기로 완화 및 백그라운드 탭 일시정지
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchAttendance();
+    }, 15000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchAttendance();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [currentUser?.id, currentUser?.phoneNumber, currentUser?.name]);
 
   // 관리자: 출석 체크 시작 (회원들에게 푸시 전송)
@@ -188,8 +217,8 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
     }
   };
 
-  // 관리자: 특정 회원 수동 출석/결석 토글
-  const handleManualToggle = async (userId: string, currentStatus: boolean) => {
+  // 관리자: 특정 회원 수동 출석/결석 토글 (강의별 출석 명부에서도 동작하도록 lectureId 지원)
+  const handleManualToggle = async (userId: string, currentStatus: boolean, targetLectureId?: string) => {
     if (!isAdmin) return;
     try {
       await fetch('/api/attendance', {
@@ -197,7 +226,8 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'manualUpdate',
-          sessionId: activeSession?.id || 'manual',
+          sessionId: targetLectureId || activeSession?.id || 'manual',
+          lectureId: targetLectureId,
           userId,
           status: currentStatus ? 'absent' : 'present',
         }),
@@ -414,36 +444,509 @@ export function AttendanceSheet({ currentUser }: AttendanceSheetProps) {
         )}
       </div>
 
-      {/* 관리자 전용: 명부 관리 vs 강의실별 출석 탭 전환 */}
+      {/* 관리자 전용: 강의별 출석 그리드(기본) vs 전체 통합 명부 탭 전환 */}
       {isAdmin && (
-        <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
-          <button
-            onClick={() => setAdminTab('roster')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-              adminTab === 'roster'
-                ? 'bg-carrot text-white shadow-sm'
-                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>📋 전체 회원 명부 관리 ({roster.length}명)</span>
-          </button>
-          <button
-            onClick={() => setAdminTab('rooms')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-              adminTab === 'rooms'
-                ? 'bg-carrot text-white shadow-sm'
-                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>🏫 강의실별 출석 현황 그리드 ({myRooms.length}개)</span>
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setAdminTab('rooms');
+                setSelectedAdminLectureId(null);
+              }}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                adminTab === 'rooms'
+                  ? 'bg-carrot text-white shadow-sm'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>🏫 강의별 출석 현황 그리드 ({myRooms.length}개 강의)</span>
+            </button>
+            <button
+              onClick={() => setAdminTab('roster')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                adminTab === 'roster'
+                  ? 'bg-carrot text-white shadow-sm'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>📋 전체 통합 회원 명부 ({roster.length}명)</span>
+            </button>
+          </div>
+          {adminTab === 'rooms' && !selectedAdminLectureId && (
+            <span className="text-[11px] text-gray-500 font-medium">
+              💡 강의 카드를 클릭하면 해당 강의의 출석 인원 명단이 표시됩니다.
+            </span>
+          )}
         </div>
       )}
 
-      {/* [요구사항 1]: 일반 회원이거나 관리자 그리드 탭일 때: 그리드 형태의 내가 입장한 강의실 출석 현황 노출 */}
-      {(!isAdmin || adminTab === 'rooms') && (
+      {/* 관리자 전용: 강의별 출석 현황 그리드 및 강의 클릭 시 출석 인원 상세 명부 */}
+      {isAdmin && adminTab === 'rooms' && (() => {
+        const selectedRoom = myRooms.find((r) => r.lectureId === selectedAdminLectureId) || null;
+
+        // 회원 동일성 매칭 헬퍼 (성명 + 연락처 뒤 4자리 또는 ID 기준)
+        const isSameMember = (
+          a: { id?: string; userId?: string; name?: string; userName?: string; phoneNumber?: string },
+          b: { id?: string; userId?: string; name?: string; userName?: string; phoneNumber?: string }
+        ) => {
+          const aName = (a.name || a.userName || '').trim();
+          const bName = (b.name || b.userName || '').trim();
+          const aPhone = (a.phoneNumber || '').replace(/\D/g, '');
+          const bPhone = (b.phoneNumber || '').replace(/\D/g, '');
+          if (aName && bName) {
+            if (aName !== bName) return false;
+            if (aPhone.length >= 4 && bPhone.length >= 4) {
+              return aPhone.slice(-4) === bPhone.slice(-4);
+            }
+            return true;
+          }
+          const aId = (a.id || a.userId || '').trim();
+          const bId = (b.id || b.userId || '').trim();
+          if (aId && bId && !aId.startsWith('sheet_user_') && !bId.startsWith('sheet_user_') && aId === bId) {
+            return true;
+          }
+          if (aPhone.length >= 8 && aPhone === bPhone) return true;
+          return false;
+        };
+
+        // 특정 강의가 선택된 경우: 해당 강의의 출석 인원 명부 표시
+        if (selectedRoom) {
+          const roomCheckedUsers = selectedRoom.checkedInUsers || [];
+          const roomActiveMembers = selectedRoom.activeMembers || [];
+          const roomWaitingMembers = selectedRoom.waitingMembers || [];
+
+          // 전체 회원 기준으로 해당 강의 출석/입장 여부 매핑
+          const lectureMemberRows = roster.map(({ user }) => {
+            const checkedItem = roomCheckedUsers.find((cu) => isSameMember(cu, user));
+            const isEnteredMember = roomActiveMembers.some((am) => isSameMember(am, user));
+            const isWaitingMember = roomWaitingMembers.some((wm) => isSameMember(wm, user));
+            return {
+              user,
+              isPresent: !!checkedItem,
+              checkedAt: checkedItem?.checkedAt || '-',
+              isEnteredMember,
+              isWaitingMember,
+            };
+          });
+
+          // 혹시 전체 회원 시트 외에 강의실에 직접 출석한 회원이 있다면 누락 없이 추가
+          for (const cu of roomCheckedUsers) {
+            if (!lectureMemberRows.some((row) => isSameMember(row.user, cu))) {
+              lectureMemberRows.unshift({
+                user: {
+                  id: cu.userId || `room_u_${cu.userName}`,
+                  name: cu.userName,
+                  phoneNumber: cu.phoneNumber,
+                  birthDate: '',
+                  job: '',
+                  email: '',
+                  carrotNickname: cu.userName,
+                  role: cu.role || 'regular',
+                  status: 'approved',
+                  joinedAt: '',
+                },
+                isPresent: true,
+                checkedAt: cu.checkedAt || '-',
+                isEnteredMember: true,
+                isWaitingMember: false,
+              });
+            }
+          }
+
+          const presentRows = lectureMemberRows.filter((r) => r.isPresent);
+          const enteredRows = lectureMemberRows.filter((r) => r.isEnteredMember || r.isPresent);
+          const filteredRows =
+            lectureRosterFilter === 'present'
+              ? presentRows
+              : lectureRosterFilter === 'entered'
+              ? enteredRows
+              : lectureMemberRows;
+
+          const totalCount = lectureMemberRows.length;
+          const presentCount = presentRows.length;
+          const absentCount = Math.max(0, totalCount - presentCount);
+          const rate = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+
+          return (
+            <div className="space-y-4 animate-fadeIn">
+              {/* 상단 강의 선택 헤더 및 뒤로가기 바 */}
+              <div className="p-4 sm:p-5 rounded-2xl border border-blue-200 bg-blue-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAdminLectureId(null)}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 text-xs font-bold flex items-center gap-1.5 transition shadow-xs"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 text-carrot" />
+                      <span>강의별 그리드로 돌아가기</span>
+                    </button>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-carrot">
+                      {selectedRoom.category}
+                    </span>
+                    {selectedRoom.attendanceActive && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-carrot text-white animate-pulse">
+                        <Radio className="w-3 h-3" />
+                        4자리 출석 진행 중 {selectedRoom.attendanceCode ? `(번호: ${selectedRoom.attendanceCode})` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-gray-950 pt-1">
+                    {selectedRoom.title} — 출석 인원 명부
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    시작 시간: {selectedRoom.startTime || '미지정'} · 현재 강의실 입장: {selectedRoom.activeCount}명 /{' '}
+                    {selectedRoom.maxAttendees === 0 ? '무제한' : `${selectedRoom.maxAttendees}명`}
+                  </p>
+                </div>
+
+                <Link
+                  href={`/lectures/${selectedRoom.lectureId}`}
+                  className="px-4 py-2 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold flex items-center gap-1.5 self-start sm:self-center shrink-0 transition shadow-sm"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>해당 강의실 열기</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              {/* 다른 강의로 빠르게 전환하는 알약 탭 */}
+              {myRooms.length > 1 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  {myRooms.map((r) => {
+                    const isSelected = r.lectureId === selectedRoom.lectureId;
+                    const cnt = r.checkedInCount ?? (r.checkedInUsers?.length || 0);
+                    return (
+                      <button
+                        key={r.lectureId}
+                        type="button"
+                        onClick={() => setSelectedAdminLectureId(r.lectureId)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shrink-0 ${
+                          isSelected
+                            ? 'bg-gray-900 text-white shadow-xs'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="truncate max-w-[180px]">{r.title}</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                            isSelected ? 'bg-carrot text-white' : 'bg-emerald-50 text-emerald-700'
+                          }`}
+                        >
+                          출석 {cnt}명
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 선택한 강의의 출석 통계 카드 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                  <p className="text-gray-500 text-[11px]">출석 완료 인원</p>
+                  <p className="text-xl font-black text-emerald-600 mt-1">{presentCount}명</p>
+                </div>
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                  <p className="text-gray-500 text-[11px]">강의실 입장 인원</p>
+                  <p className="text-xl font-black text-carrot mt-1">{selectedRoom.activeCount}명</p>
+                </div>
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                  <p className="text-gray-500 text-[11px]">미출석 인원 (전체 대비)</p>
+                  <p className="text-xl font-black text-gray-400 mt-1">{absentCount}명</p>
+                </div>
+                <div className="p-4 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                  <p className="text-gray-500 text-[11px]">출석률</p>
+                  <p className="text-xl font-black text-gray-950 mt-1">{rate}%</p>
+                </div>
+              </div>
+
+              {/* 필터 탭 (출석 완료 인원 / 강의실 입장 인원 / 전체 회원 명부) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setLectureRosterFilter('present')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      lectureRosterFilter === 'present'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>출석 완료 인원 ({presentCount}명)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLectureRosterFilter('entered')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      lectureRosterFilter === 'entered'
+                        ? 'bg-carrot text-white shadow-xs'
+                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>강의실 입장 인원 ({enteredRows.length}명)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLectureRosterFilter('all')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                      lectureRosterFilter === 'all'
+                        ? 'bg-gray-900 text-white shadow-xs'
+                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span>전체 회원 명부 / 수동 조정 ({totalCount}명)</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleSyncToGoogleSheet}
+                  disabled={sheetSyncing}
+                  className="text-xs text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 self-start sm:self-auto"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>구글 시트 &apos;출석부&apos; 시트에 저장</span>
+                </button>
+              </div>
+
+              {syncMessage && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{syncMessage}</span>
+                </div>
+              )}
+
+              {/* 선택한 강의의 출석 인원 테이블 */}
+              <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <table className="w-full text-left text-xs text-gray-700">
+                  <thead className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-500 uppercase">
+                    <tr>
+                      <th className="py-3 px-4">회원 성명</th>
+                      <th className="py-3 px-4">연락처</th>
+                      <th className="py-3 px-4">회원 등급</th>
+                      <th className="py-3 px-4">강의실 입장</th>
+                      <th className="py-3 px-4">출석 상태</th>
+                      <th className="py-3 px-4">체크 시각</th>
+                      <th className="py-3 px-4 text-right">출석 방식 / 조정</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-gray-500 text-xs space-y-3">
+                          <p className="font-bold text-gray-700">
+                            {lectureRosterFilter === 'present'
+                              ? '아직 이 강의에 출석 완료된 회원이 없습니다.'
+                              : lectureRosterFilter === 'entered'
+                              ? '현재 이 강의실에 입장한 회원이 없습니다.'
+                              : '등록된 회원이 없습니다.'}
+                          </p>
+                          {lectureRosterFilter !== 'all' && (
+                            <div className="flex items-center justify-center gap-2 pt-1">
+                              {enteredRows.length > 0 && lectureRosterFilter === 'present' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLectureRosterFilter('entered')}
+                                  className="px-3 py-1.5 rounded-xl bg-blue-50 text-carrot font-bold text-xs hover:bg-blue-100 transition"
+                                >
+                                  강의실 입장 인원 보기 ({enteredRows.length}명)
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setLectureRosterFilter('all')}
+                                className="px-3 py-1.5 rounded-xl bg-gray-900 text-white font-bold text-xs hover:bg-black transition"
+                              >
+                                전체 회원 명부에서 수동 출석 처리하기 ({totalCount}명)
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRows.map(({ user, isPresent, checkedAt, isEnteredMember, isWaitingMember }) => (
+                        <tr key={user.id} className="hover:bg-gray-50/70 transition">
+                          <td className="py-3 px-4 font-bold text-gray-900">
+                            {user.name}
+                            {user.name === '지정인' && (
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] bg-black text-white font-bold">
+                                모임장
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-gray-600">{user.phoneNumber}</td>
+                          <td className="py-3 px-4">
+                            <RoleBadge role={user.role} size="sm" />
+                          </td>
+                          <td className="py-3 px-4">
+                            {isEnteredMember ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-carrot border border-blue-200">
+                                입장 완료
+                              </span>
+                            ) : isWaitingMember ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                대기열
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-gray-400">미입장</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {isPresent ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                출석 완료
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                미출석
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-gray-500 text-[11px]">{checkedAt}</td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleManualToggle(user.id, isPresent, selectedRoom.lectureId)}
+                              className={`px-3 py-1 rounded-lg text-xs font-semibold transition border ${
+                                isPresent
+                                  ? 'border-gray-200 bg-white text-gray-600 hover:bg-red-50 hover:text-red-600'
+                                  : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold'
+                              }`}
+                            >
+                              {isPresent ? '결석으로 변경' : '출석 처리'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        }
+
+        // 강의를 아직 선택하지 않은 기본 상태: 강의별 그리드 카드 렌더링
+        return (
+          <div className="space-y-4">
+            {myRooms.length === 0 ? (
+              <div className="p-10 rounded-2xl border border-dashed border-gray-300 bg-white text-center space-y-2">
+                <BookOpen className="w-8 h-8 text-carrot mx-auto" />
+                <p className="text-sm font-bold text-gray-800">등록된 강의가 없습니다.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myRooms.map((room) => {
+                  const checkedCount = room.checkedInCount ?? (room.checkedInUsers?.length || 0);
+                  return (
+                    <div
+                      key={room.lectureId}
+                      onClick={() => {
+                        setSelectedAdminLectureId(room.lectureId);
+                        setLectureRosterFilter('present');
+                      }}
+                      className={`cursor-pointer rounded-2xl border p-5 bg-white shadow-sm hover:shadow-md hover:border-carrot transition flex flex-col justify-between group ${
+                        room.attendanceActive
+                          ? 'border-carrot ring-1 ring-carrot/20'
+                          : checkedCount > 0
+                          ? 'border-emerald-300'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      <div>
+                        {/* 상단 카테고리 & 출석 상태 배지 */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-carrot border border-blue-100">
+                            {room.category}
+                          </span>
+                          {room.attendanceActive ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-carrot text-white animate-pulse">
+                              <Radio className="w-3 h-3" />
+                              출석 진행 중
+                            </span>
+                          ) : checkedCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3" />
+                              출석 {checkedCount}명
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500">
+                              출석 대기
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 강의 제목 */}
+                        <h4 className="text-sm font-bold text-gray-900 mt-3 line-clamp-2 group-hover:text-carrot transition">
+                          {room.title}
+                        </h4>
+
+                        {/* 강의 시작 시간 */}
+                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
+                          <Clock className="w-3.5 h-3.5 text-carrot shrink-0" />
+                          <span>시작 시간: {room.startTime || '미지정'}</span>
+                        </div>
+
+                        {/* 강의별 출석 & 입장 요약 박스 */}
+                        <div className="mt-4 grid grid-cols-2 gap-2 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                          <div>
+                            <p className="text-[11px] text-gray-500">출석 완료 인원</p>
+                            <p className="text-base font-black text-emerald-600 mt-0.5">
+                              {checkedCount}명
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-gray-500">현재 입장 인원</p>
+                            <p className="text-base font-black text-gray-900 mt-0.5">
+                              {room.activeCount}{' '}
+                              <span className="text-xs font-normal text-gray-400">
+                                / {room.maxAttendees === 0 ? '무제한' : `${room.maxAttendees}명`}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 하단 출석 인원 보기 버튼 */}
+                      <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedAdminLectureId(room.lectureId);
+                            setLectureRosterFilter('present');
+                          }}
+                          className="flex-1 py-2.5 px-3 rounded-xl bg-carrot group-hover:bg-blue-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>출석 인원 보기 ({checkedCount}명)</span>
+                        </button>
+                        <Link
+                          href={`/lectures/${room.lectureId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="py-2.5 px-3 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-semibold transition shrink-0"
+                          title="강의실 페이지로 이동"
+                        >
+                          강의실
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* [요구사항 1]: 일반 회원일 때: 그리드 형태의 내가 입장한 강의실 출석 현황 노출 */}
+      {!isAdmin && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">

@@ -49,9 +49,19 @@ export function LiveChatRoom({ currentUser }: LiveChatRoomProps) {
 
   useEffect(() => {
     fetchChats();
-    // 4초마다 새 메시지 자동 동기화
-    const interval = setInterval(fetchChats, 4000);
-    return () => clearInterval(interval);
+    // 4초마다 새 메시지 자동 동기화 -> 15초 주기로 완화 및 백그라운드 탭 일시정지
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchChats();
+    }, 15000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchChats();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {

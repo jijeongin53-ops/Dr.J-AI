@@ -86,12 +86,22 @@ export async function getSheetData<T>(sheetName: string, fallbackData: T[]): Pro
   }
 }
 
+// 서버 메모리 캐시 타임스탬프 (반복적인 시트 API 호출 및 CPU 소모 방지)
+let lastUsersFetchTime = 0;
+let lastLecturesFetchTime = 0;
+
 /**
  * 사용자 목록 조회 (구글 스프레드시트 실시간 동기화 및 가상 회원 제외)
  * - 이름과 연락처 뒤 4자리가 일치하는 데이터 중복 제거
  * - 전화번호(010-0000-0000) 및 생년월일(0000-00-00) 서식 자동 정규화
  */
 export async function getUsers(): Promise<MemberUser[]> {
+  const now = Date.now();
+  // 8초간 서버 메모리 캐시 재사용 (Vercel CPU 최적화)
+  if (lastUsersFetchTime > 0 && now - lastUsersFetchTime < 8000 && inMemoryUsers.length > 0) {
+    return inMemoryUsers;
+  }
+
   const gasUrl = getRuntimeGasUrl();
   if (gasUrl) {
     try {
@@ -153,6 +163,7 @@ export async function getUsers(): Promise<MemberUser[]> {
 
           if (sheetUsers.length > 0) {
             inMemoryUsers = sheetUsers;
+            lastUsersFetchTime = Date.now();
             return sheetUsers;
           }
         }
@@ -188,6 +199,7 @@ export async function addUser(user: MemberUser): Promise<{ user: MemberUser; she
   const last4 = getLast4PhoneDigits(user.phoneNumber);
   inMemoryUsers = inMemoryUsers.filter((u) => !(u.name === user.name && getLast4PhoneDigits(u.phoneNumber) === last4));
   inMemoryUsers.push(user);
+  lastUsersFetchTime = Date.now();
 
   let sheetSaved = false;
   let saveError: string | undefined;
@@ -296,6 +308,7 @@ export async function updateUserRoleAndStatus(
     if (rejectionReason !== undefined) {
       target.rejectionReason = rejectionReason;
     }
+    lastUsersFetchTime = Date.now();
 
     // 구글 스프레드시트의 해당 행 등급/상태 동기화 (GAS 웹훅)
     const gasUrl = getRuntimeGasUrl();
@@ -468,7 +481,8 @@ export async function fetchAllSheetStoreRows(
   forceFresh: boolean = false
 ): Promise<Array<{ tag: string; subKey: string; jsonStr: string }>> {
   const now = Date.now();
-  if (!forceFresh && cachedStoreRows && now - lastStoreFetchTime < 800) {
+  // 8초간 서버 메모리 캐시 재사용 (쓰기 발생 시에는 즉시 초기화됨)
+  if (!forceFresh && cachedStoreRows && now - lastStoreFetchTime < 8000) {
     return cachedStoreRows;
   }
 
@@ -569,6 +583,12 @@ const deletedLectureIds = new Set<string>();
  * 강의 목록 조회
  */
 export async function getLectures(): Promise<Lecture[]> {
+  const now = Date.now();
+  // 10초간 서버 메모리 캐시 재사용 (Vercel CPU 최적화)
+  if (lastLecturesFetchTime > 0 && now - lastLecturesFetchTime < 10000 && inMemoryLectures.length > 0) {
+    return inMemoryLectures;
+  }
+
   const sheetLectures: Lecture[] = [];
 
   // 1. 구글 시트 '동영상 업로드 현황' 탭 실시간 조회 (gviz JSON API 활용)
@@ -712,6 +732,7 @@ export async function getLectures(): Promise<Lecture[]> {
   );
   if (finalLectures.length > 0) {
     inMemoryLectures = finalLectures;
+    lastLecturesFetchTime = Date.now();
   }
 
   return inMemoryLectures;
@@ -729,6 +750,7 @@ export async function addLecture(lecture: Lecture): Promise<Lecture> {
   } else {
     inMemoryLectures.unshift(lecture);
   }
+  lastLecturesFetchTime = Date.now();
 
   await saveRecordToSheetStore('__LECTURE__', lecture.id, lecture.title, lecture, lecture.description);
 
@@ -783,6 +805,7 @@ export async function updateLecture(updated: Lecture): Promise<Lecture | null> {
   } else {
     inMemoryLectures.unshift(updated);
   }
+  lastLecturesFetchTime = Date.now();
 
   await saveRecordToSheetStore('__LECTURE__', updated.id, updated.title, updated, updated.description);
 
@@ -819,6 +842,7 @@ export async function deleteLecture(id: string): Promise<boolean> {
   const beforeLen = inMemoryLectures.length;
   inMemoryLectures = inMemoryLectures.filter((l) => l.id !== id);
   const deleted = inMemoryLectures.length < beforeLen;
+  lastLecturesFetchTime = Date.now();
 
   await saveRecordToSheetStore('__LECTURE_DELETE__', id, id, { id }, 'deleted');
 

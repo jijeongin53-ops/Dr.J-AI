@@ -72,8 +72,11 @@ export function JoinOrLoginForm({ currentUser, onAuthSuccess }: JoinOrLoginFormP
       } catch (_) {}
     };
 
-    // 3초 주기로 승인 상태 실시간 감지
-    const timer = setInterval(checkApprovalStatus, 3000);
+    // 3초 주기로 승인 상태 실시간 감지 -> 15초 주기로 완화 및 백그라운드 탭 일시정지
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      checkApprovalStatus();
+    }, 15000);
     checkApprovalStatus();
 
     // 탭 간 실시간 통신 (동일 브라우저 즉시 반영)

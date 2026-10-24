@@ -28,11 +28,12 @@ export function AttendancePushAlert() {
     };
   }, []);
 
-  // 주기적으로 활성 출석 세션 체크 (3초 간격)
+  // 주기적으로 활성 출석 세션 체크 (3초 간격 -> 20초 간격 완화 및 백그라운드 탭 일시정지)
   useEffect(() => {
     if (!currentUser) return;
 
     const checkActiveSession = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const res = await fetch('/api/attendance?mode=active', { cache: 'no-store' });
         const data = await res.json();
@@ -58,8 +59,15 @@ export function AttendancePushAlert() {
     };
 
     checkActiveSession();
-    const interval = setInterval(checkActiveSession, 3000);
-    return () => clearInterval(interval);
+    const interval = setInterval(checkActiveSession, 20000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) checkActiveSession();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [currentUser, activeSession?.id]);
 
   // 회원이 직접 출석 체크하기 클릭

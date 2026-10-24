@@ -17,9 +17,14 @@ interface GlobalAttendanceEvent {
 }
 
 const inMemoryAttendanceEvents: GlobalAttendanceEvent[] = [];
+// 서버 메모리 캐시 타임스탬프 (반복 동기화 및 불필요한 GAS 호출 방지)
+let lastAttendanceSyncTime = 0;
+let lastGasAttendanceCheckTime = 0;
 
 async function appendAttendanceEvent(ev: GlobalAttendanceEvent): Promise<void> {
   inMemoryAttendanceEvents.push(ev);
+  lastAttendanceSyncTime = 0;
+  lastGasAttendanceCheckTime = 0;
   await saveRecordToSheetStore(
     '__ATTENDANCE_EVENT__',
     ev.type,
@@ -29,9 +34,14 @@ async function appendAttendanceEvent(ev: GlobalAttendanceEvent): Promise<void> {
   );
 }
 
-export async function syncAttendanceFromSheet(): Promise<void> {
+export async function syncAttendanceFromSheet(forceFresh: boolean = false): Promise<void> {
+  const now = Date.now();
+  if (!forceFresh && lastAttendanceSyncTime > 0 && now - lastAttendanceSyncTime < 8000) {
+    return;
+  }
+
   try {
-    const rows = await fetchAllSheetStoreRows();
+    const rows = await fetchAllSheetStoreRows(forceFresh);
     const map = new Map<string, GlobalAttendanceEvent>();
 
     for (const r of rows) {
@@ -50,6 +60,7 @@ export async function syncAttendanceFromSheet(): Promise<void> {
     }
 
     const sorted = Array.from(map.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    lastAttendanceSyncTime = Date.now();
     if (sorted.length === 0) return;
 
     let rebuiltActive: AttendanceSession | null = null;
@@ -97,6 +108,13 @@ export async function syncAttendanceFromSheet(): Promise<void> {
 export async function getActiveAttendanceSessionAsync(): Promise<AttendanceSession | null> {
   await syncAttendanceFromSheet();
   if (activeSession) return activeSession;
+
+  // GAS 직접 호출도 15초 주기로 캐싱하여 매 폴링마다 외부 대기 시간 발생 방지
+  const now = Date.now();
+  if (lastGasAttendanceCheckTime > 0 && now - lastGasAttendanceCheckTime < 15000) {
+    return activeSession;
+  }
+  lastGasAttendanceCheckTime = now;
 
   const gasUrl = getRuntimeGasUrl();
   if (gasUrl) {

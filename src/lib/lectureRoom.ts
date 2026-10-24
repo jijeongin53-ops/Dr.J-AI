@@ -41,9 +41,11 @@ export interface RoomEvent {
     | 'updateStartTime'
     | 'startAttendance'
     | 'stopAttendance'
-    | 'checkInAttendance';
+    | 'checkInAttendance'
+    | 'manualAttendance';
   timestamp: number;
   isManualEnter?: boolean;
+  isPresent?: boolean;
   user?: MemberUser;
   userId?: string;
   userName?: string;
@@ -63,6 +65,8 @@ export interface RoomEvent {
 // 메모리 내 전체 강의실 상태 저장소
 const roomStates: Map<string, RoomState> = new Map();
 const inMemoryRoomEvents: RoomEvent[] = [];
+// 서버 메모리 캐시 타임스탬프 (Vercel CPU 최적화)
+let lastRoomSyncTime = 0;
 
 function cleanPhoneDigits(phone?: string): string {
   return (phone || '').replace(/\D/g, '');
@@ -99,6 +103,7 @@ function isSameRoomUser(
 
 async function appendRoomEvent(event: RoomEvent): Promise<void> {
   inMemoryRoomEvents.push(event);
+  lastRoomSyncTime = 0;
   const actorName =
     event.user?.name ||
     event.checkedUser?.userName ||
@@ -245,12 +250,46 @@ function applyRoomEventToState(room: RoomState, ev: RoomEvent): void {
     }
     room.lastUpdated = ev.timestamp || Date.now();
   }
+
+  // 관리자 수동 출석/결석 조정 이벤트 반영
+  if (ev.type === 'manualAttendance' && ev.checkedUser) {
+    if (!room.attendance) {
+      room.attendance = {
+        sessionId: `att_room_manual_${room.lectureId}`,
+        title: '강의실 출석 명부',
+        code: '0000',
+        startedAt: ev.checkedUser.checkedAt,
+        isActive: false,
+        checkedInUsers: [],
+      };
+    }
+    const cu = ev.checkedUser;
+    if (ev.isPresent) {
+      const existingIdx = room.attendance.checkedInUsers.findIndex((u) => isSameRoomUser(u, cu));
+      if (existingIdx >= 0) {
+        room.attendance.checkedInUsers[existingIdx] = cu;
+      } else {
+        room.attendance.checkedInUsers.push(cu);
+      }
+    } else {
+      room.attendance.checkedInUsers = room.attendance.checkedInUsers.filter(
+        (u) => !isSameRoomUser(u, cu)
+      );
+    }
+    room.lastUpdated = ev.timestamp || Date.now();
+  }
 }
 
 /**
  * 구글 시트에 저장된 모든 강의실 이벤트를 읽어와 최신 상태를 재구성합니다.
  */
 export async function syncAllRoomsFromSheet(forceFresh: boolean = false): Promise<void> {
+  const now = Date.now();
+  // 8초간 서버 메모리 캐시 재사용 (Vercel CPU 소모 90% 이상 절감)
+  if (!forceFresh && lastRoomSyncTime > 0 && now - lastRoomSyncTime < 8000) {
+    return;
+  }
+
   try {
     const rows = await fetchAllSheetStoreRows(forceFresh);
     const eventMap = new Map<string, RoomEvent>();
@@ -299,6 +338,7 @@ export async function syncAllRoomsFromSheet(forceFresh: boolean = false): Promis
     rebuiltRooms.forEach((room, lecId) => {
       roomStates.set(lecId, room);
     });
+    lastRoomSyncTime = Date.now();
   } catch (e) {
     console.warn('[LectureRoom] 시트 동기화 실패:', e);
   }
@@ -842,4 +882,37 @@ export function getAllRoomCheckedInUsers(): Array<{
   });
 
   return list;
+}
+
+/**
+ * 관리자: 특정 강의실의 특정 회원 출석/결석 상태를 수동으로 변경
+ */
+export async function manualToggleRoomAttendance(
+  lectureId: string,
+  user: MemberUser,
+  isPresent: boolean
+): Promise<void> {
+  await syncAllRoomsFromSheet(true);
+  const room = getOrCreateRoom(lectureId);
+  const timeString = getKoreanNowString();
+
+  const checkedUser = {
+    userId: user.id,
+    userName: user.name,
+    phoneNumber: user.phoneNumber,
+    role: user.role,
+    checkedAt: isPresent ? timeString : '-',
+  };
+
+  const event: RoomEvent = {
+    eventId: `re_att_manual_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    lectureId,
+    type: 'manualAttendance',
+    timestamp: Date.now(),
+    isPresent,
+    checkedUser,
+  };
+
+  applyRoomEventToState(room, event);
+  await appendRoomEvent(event);
 }

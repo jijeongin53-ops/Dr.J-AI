@@ -60,8 +60,19 @@ export function CommentSection({
     };
 
     fetchLatestComments();
-    const interval = setInterval(fetchLatestComments, 4000);
-    return () => clearInterval(interval);
+    // 20초 주기로 완화 및 백그라운드 탭 일시정지 (Vercel CPU 절감)
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchLatestComments();
+    }, 20000);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchLatestComments();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [lectureId]);
 
   const handleSubmit = async (e: React.FormEvent) => {

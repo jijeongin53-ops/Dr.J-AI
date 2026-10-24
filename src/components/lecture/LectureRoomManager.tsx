@@ -183,14 +183,22 @@ export function LectureRoomManager({
 
   useEffect(() => {
     fetchRoomStatus();
-    fetchActiveAttendance();
 
+    // 15초 주기로 완화 및 백그라운드 탭 일시정지 (중복 출석 API 호출 제거로 Vercel CPU 절감)
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       fetchRoomStatus();
-      fetchActiveAttendance();
-    }, 3000);
+    }, 15000);
 
-    return () => clearInterval(interval);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchRoomStatus();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [lectureId, currentUser?.id, currentUser?.name, isAdmin, attendeeDismissedSessionId, attendeeSuccess]);
 
   // 페이지 진입 시 로그인 회원 자동 입장 시도 (비활성화: 회원이 직접 '강의실 입장하기' 버튼을 클릭할 때만 입장 처리)
