@@ -454,6 +454,13 @@ function doPost(e) {
       var fileId = file.getId();
       var fileUrl = "https://drive.google.com/file/d/" + fileId + "/view?usp=sharing";
 
+      // 실시간 자동 저장 중 이전 임시 체크포인트 파일이 있으면 교체 정리
+      if (data.previousFileId && String(data.previousFileId).trim() !== "" && String(data.previousFileId).trim() !== fileId) {
+        try {
+          DriveApp.getFileById(String(data.previousFileId).trim()).setTrashed(true);
+        } catch (trashErr) {}
+      }
+
       if (data.lectureId) {
         var lecSheet = ss.getSheetByName("동영상 업로드 현황");
         if (lecSheet && lecSheet.getLastRow() > 1) {
@@ -461,6 +468,9 @@ function doPost(e) {
           for (var r = 1; r < lecValues.length; r++) {
             if (String(lecValues[r][0]).trim() === String(data.lectureId).trim()) {
               var existingVideo = String(lecValues[r][5] || "").trim();
+              if (data.previousFileId && existingVideo.indexOf(String(data.previousFileId).trim()) !== -1) {
+                existingVideo = existingVideo.replace(String(data.previousFileId).trim(), "").trim();
+              }
               var updatedVideo = existingVideo ? (fileId + "\n" + existingVideo) : fileId;
               lecSheet.getRange(r + 1, 6).setValue(updatedVideo);
               break;
@@ -476,6 +486,17 @@ function doPost(e) {
         fileUrl: fileUrl,
         folderUrl: "https://drive.google.com/drive/folders/" + targetFolderId
       })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // [ACTION 10]: 방송 종료 후 '저장하지 않기' 선택 시 실시간 임시 저장된 드라이브 영상 삭제
+    if (action === "deleteDriveVideo") {
+      if (data.fileId) {
+        try {
+          DriveApp.getFileById(String(data.fileId).trim()).setTrashed(true);
+        } catch (delErr) {}
+      }
+      return ContentService.createTextOutput(JSON.stringify({ result: "success", action: "deleteDriveVideo" }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService.createTextOutput(JSON.stringify({ result: "ignored", message: "미처리 액션: " + action }))

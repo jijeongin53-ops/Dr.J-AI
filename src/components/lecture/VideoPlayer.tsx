@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { MemberRole } from '@/types';
 import { hasRequiredRole, getDrivePreviewUrl } from '@/lib/google/drive';
 import { GOOGLE_DRIVE_FOLDER_URL } from '@/lib/constants';
-import { Lock, Play, ExternalLink, Film, Radio, Video, FolderUp, Power } from 'lucide-react';
+import { Lock, Play, ExternalLink, Film, Radio, Video, FolderUp, Power, CircleDot } from 'lucide-react';
 import Link from 'next/link';
 import { LiveStreamStudio } from './LiveStreamStudio';
 
@@ -37,6 +37,7 @@ export function VideoPlayer({
   const [savedDriveReplayId, setSavedDriveReplayId] = useState<string>('');
   const [localReplayBlobUrl, setLocalReplayBlobUrl] = useState<string | null>(null);
   const [preferLocalReplay, setPreferLocalReplay] = useState<boolean>(false);
+  const [startRecordSignal, setStartRecordSignal] = useState<number>(0);
   const [endBroadcastSignal, setEndBroadcastSignal] = useState<number>(0);
 
   const isAdmin = userRole === 'admin' || userName === '지정인' || qrAdminBypass;
@@ -135,7 +136,7 @@ export function VideoPlayer({
             }`}
           >
             <Video className="w-3.5 h-3.5" />
-            <span>🎬 강의 다시보기 / 영상 시청</span>
+            <span>녹화된 영상 보기</span>
           </button>
           <button
             type="button"
@@ -147,41 +148,37 @@ export function VideoPlayer({
             }`}
           >
             <Radio className={`w-3.5 h-3.5 ${playerMode === 'live' ? 'animate-pulse' : 'text-red-400'}`} />
-            <span>🔴 실시간 화면공유 & 스마트폰 라이브</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setPlayerMode('live');
-              setEndBroadcastSignal((prev) => prev + 1);
-            }}
-            className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition shadow-md border border-red-400/50"
-          >
-            <Power className="w-3.5 h-3.5" />
-            <span>⏹ 방송 끄기</span>
+            <span>실시간 영상 보기</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
-          <a
-            href={GOOGLE_DRIVE_FOLDER_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
-          >
-            <FolderUp className="w-3.5 h-3.5" />
-            <span>다시보기 구글 드라이브 폴더 열기</span>
-          </a>
-          {playerMode === 'vod' && (
+        {/* 관리자 전용: 방송 녹화 / 방송 끄기 버튼 (일반 회원에게는 절대 노출되지 않음) */}
+        {isAdmin && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setPlayerMode('live')}
-              className="text-[11px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1"
+              onClick={() => {
+                setPlayerMode('live');
+                setStartRecordSignal((prev) => prev + 1);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition shadow-sm"
             >
-              <span>⚡ 지금 노트북 화면공유 + 스마트폰 라이브 켜기 →</span>
+              <CircleDot className="w-3.5 h-3.5" />
+              <span>방송 녹화</span>
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPlayerMode('live');
+                setEndBroadcastSignal((prev) => prev + 1);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition shadow-md"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span>방송 끄기</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {playerMode === 'live' ? (
@@ -189,6 +186,7 @@ export function VideoPlayer({
           lectureId={lectureId}
           lectureTitle={title}
           isAdmin={isAdmin}
+          externalStartRecordTrigger={startRecordSignal}
           externalEndBroadcastTrigger={endBroadcastSignal}
           onSaveYoutubeLiveUrl={(ytUrl) => {
             setCustomYoutubeLiveUrl(ytUrl);
@@ -213,7 +211,7 @@ export function VideoPlayer({
       ) : (
         <>
           {/* 다중 동영상(2~3개) 또는 방금 녹화된 다시보기 전환 바 */}
-          {(resolvedVideos.length > 1 || localReplayBlobUrl) && (
+          {isAdmin && (resolvedVideos.length > 1 || localReplayBlobUrl) && (
             <div className="px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs text-gray-300 font-semibold">
                 <Film className="w-3.5 h-3.5 text-carrot" />
@@ -278,14 +276,6 @@ export function VideoPlayer({
               <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 bg-gray-900 space-y-3 p-6 text-center">
                 <Play className="w-10 h-10 opacity-50" />
                 <p className="text-sm">등록된 동영상이 없습니다.</p>
-                <button
-                  type="button"
-                  onClick={() => setPlayerMode('live')}
-                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 transition"
-                >
-                  <Radio className="w-3.5 h-3.5" />
-                  <span>실시간 라이브 방송 탭으로 이동</span>
-                </button>
               </div>
             )}
           </div>
@@ -296,20 +286,8 @@ export function VideoPlayer({
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-gray-700 font-medium">
                 실시간 고화질 다시보기 스트리밍 지원 (구글 드라이브 & 유튜브 라이브 연동)
-                {resolvedVideos.length > 1 ? ` (현재 영상 #${safeIndex + 1} / 총 ${resolvedVideos.length}개)` : ''}
               </span>
             </div>
-            {previewUrl && (
-              <a
-                href={previewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-gray-600 hover:text-gray-900 font-medium transition"
-              >
-                <span>전체화면 새창으로 열기</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
           </div>
         </>
       )}
