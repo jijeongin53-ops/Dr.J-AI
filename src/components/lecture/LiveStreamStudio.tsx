@@ -399,6 +399,12 @@ export function LiveStreamStudio({
             connectedViewers.add(conn.peer);
             setViewerCount(connectedViewers.size);
             hostPeer.call(conn.peer, localCamStreamRef.current);
+          } else if (data?.type === 'REMOTE_START_RECORD') {
+            startPhoneRecording();
+          } else if (data?.type === 'REMOTE_STOP_RECORD') {
+            stopPhoneRecording();
+          } else if (data?.type === 'REMOTE_TOGGLE_FACING') {
+            toggleCameraFacing();
           }
         });
         conn.on('close', () => {
@@ -758,14 +764,38 @@ export function LiveStreamStudio({
                   <h4 className="text-xs sm:text-sm font-bold text-white">
                     📱 내 스마트폰 실시간 영상 송출 & 스마트폰 직접 녹화
                   </h4>
+                  {hasRemoteCam && !isCamStreaming && (
+                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      스마트폰 카메라 연결됨
+                    </span>
+                  )}
                 </div>
-                {isRecording && (
-                  <span className="px-2.5 py-1 rounded-full bg-red-600 text-white text-xs font-black flex items-center gap-1.5 animate-pulse">
-                    <CircleDot className="w-3.5 h-3.5" />
-                    <span>REC {formatTimer(recordingSeconds)}</span>
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {isRecording && (
+                    <span className="px-2.5 py-1 rounded-full bg-red-600 text-white text-xs font-black flex items-center gap-1.5 animate-pulse">
+                      <CircleDot className="w-3.5 h-3.5" />
+                      <span>REC {formatTimer(recordingSeconds)}</span>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>📱 내 스마트폰 연결 QR코드 보기</span>
+                  </button>
+                </div>
               </div>
+
+              {/* 노트북에서 이 탭을 열었을 때의 친절한 안내 배너 */}
+              {!isCamStreaming && (
+                <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/30 text-xs text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <p className="leading-relaxed">
+                    💡 <strong>스마트폰 연결 방법:</strong> 우측 상단의 <strong>[📱 내 스마트폰 연결 QR코드 보기]</strong>를 눌러 스마트폰 카메라로 스캔한 뒤, <strong>스마트폰 화면에서 아래 초록색 [송출 시작] 및 빨간색 [녹화 시작] 버튼</strong>을 눌러주세요!
+                  </p>
+                </div>
+              )}
 
               {/* 스마트폰 카메라 시작/종료 및 전후면/마이크 제어 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
