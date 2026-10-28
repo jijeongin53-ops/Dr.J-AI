@@ -12,7 +12,13 @@ import { LectureReviewSection } from '@/components/lecture/LectureReviewSection'
 import { LectureRoomManager } from '@/components/lecture/LectureRoomManager';
 import { RoleBadge } from '@/components/common/RoleBadge';
 import { LectureEditModal } from '@/components/admin/LectureEditModal';
-import { mergeLectures, deleteStoredLecture, getStoredLectures } from '@/lib/lecturesStorage';
+import {
+  mergeLectures,
+  deleteStoredLecture,
+  getStoredLectures,
+  updateStoredLecture,
+} from '@/lib/lecturesStorage';
+import { extractDriveFileId } from '@/lib/google/drive';
 import { ArrowLeft, Clock, Calendar, FileText, Edit2, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -100,6 +106,41 @@ export default function LectureDetailPage() {
     }
   };
 
+  // 라이브 방송 종료 후 구글 드라이브에 저장한 영상을 본 강의실의 다시보기 영상으로 즉시 등록
+  const handleSaveReplayVideo = async (newVideoUrlOrId: string) => {
+    if (!lecture || !newVideoUrlOrId.trim()) return;
+    const cleanTarget = newVideoUrlOrId.trim();
+    const extractedId = extractDriveFileId(cleanTarget);
+    const existingList =
+      Array.isArray(lecture.videoUrls) && lecture.videoUrls.length > 0
+        ? lecture.videoUrls
+        : lecture.videoUrl
+        ? [lecture.videoUrl]
+        : [];
+    const nextVideoUrls = [
+      cleanTarget,
+      ...existingList.filter((item) => item && item !== cleanTarget),
+    ].slice(0, 3);
+
+    const updatedLecture: Lecture = {
+      ...lecture,
+      videoUrl: nextVideoUrls[0],
+      videoUrls: nextVideoUrls,
+      driveFileId: extractedId || cleanTarget,
+    };
+
+    setLecture(updatedLecture);
+    updateStoredLecture(updatedLecture);
+
+    try {
+      await fetch('/api/lectures', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedLecture),
+      });
+    } catch (_) {}
+  };
+
   if (loading) {
     return (
       <div className="py-24 text-center text-xs text-gray-400">
@@ -178,6 +219,7 @@ export default function LectureDetailPage() {
           minViewRole={lecture.minViewRole}
           userRole={currentUser?.role}
           userName={currentUser?.name}
+          onSaveReplayVideo={handleSaveReplayVideo}
         />
       </section>
 

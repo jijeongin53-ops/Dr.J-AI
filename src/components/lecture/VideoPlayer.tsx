@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { MemberRole } from '@/types';
 import { hasRequiredRole, getDrivePreviewUrl } from '@/lib/google/drive';
-import { Lock, Play, ExternalLink, Film, Radio, Video } from 'lucide-react';
+import { GOOGLE_DRIVE_FOLDER_URL } from '@/lib/constants';
+import { Lock, Play, ExternalLink, Film, Radio, Video, FolderUp } from 'lucide-react';
 import Link from 'next/link';
 import { LiveStreamStudio } from './LiveStreamStudio';
 
@@ -16,6 +17,7 @@ interface VideoPlayerProps {
   minViewRole: MemberRole;
   userRole?: MemberRole;
   userName?: string;
+  onSaveReplayVideo?: (videoUrlOrId: string) => void;
 }
 
 export function VideoPlayer({
@@ -27,10 +29,14 @@ export function VideoPlayer({
   minViewRole,
   userRole,
   userName,
+  onSaveReplayVideo,
 }: VideoPlayerProps) {
   const [qrAdminBypass, setQrAdminBypass] = useState(false);
   const [playerMode, setPlayerMode] = useState<'vod' | 'live'>('vod');
   const [customYoutubeLiveUrl, setCustomYoutubeLiveUrl] = useState<string>('');
+  const [savedDriveReplayId, setSavedDriveReplayId] = useState<string>('');
+  const [localReplayBlobUrl, setLocalReplayBlobUrl] = useState<string | null>(null);
+  const [preferLocalReplay, setPreferLocalReplay] = useState<boolean>(false);
 
   const isAdmin = userRole === 'admin' || userName === '지정인' || qrAdminBypass;
   const canView = hasRequiredRole(userRole, minViewRole) || qrAdminBypass;
@@ -47,30 +53,38 @@ export function VideoPlayer({
     }
   }, []);
 
-  // 최대 3개까지의 동영상 목록 구성
+  // 최대 3개까지의 동영상 목록 구성 (방금 저장된 구글 드라이브 다시보기 영상 최우선 반영)
   const resolvedVideos = (() => {
-    if (Array.isArray(videoUrls) && videoUrls.length > 0) {
-      const cleaned = videoUrls.map((v) => String(v || '').trim()).filter(Boolean).slice(0, 3);
-      if (cleaned.length > 0) return cleaned;
+    const baseList: string[] = [];
+    if (savedDriveReplayId && savedDriveReplayId.trim()) {
+      baseList.push(savedDriveReplayId.trim());
     }
-    if (videoUrl && videoUrl.trim()) {
+    if (Array.isArray(videoUrls) && videoUrls.length > 0) {
+      for (const v of videoUrls) {
+        const cleaned = String(v || '').trim();
+        if (cleaned && !baseList.includes(cleaned)) baseList.push(cleaned);
+      }
+    } else if (videoUrl && videoUrl.trim()) {
       const split = videoUrl
         .split(/\r?\n|\|/)
         .map((v) => v.trim())
-        .filter(Boolean)
-        .slice(0, 3);
-      if (split.length > 0) return split;
+        .filter(Boolean);
+      for (const v of split) {
+        if (!baseList.includes(v)) baseList.push(v);
+      }
+    } else if (driveFileId && driveFileId.trim()) {
+      if (!baseList.includes(driveFileId.trim())) {
+        baseList.push(driveFileId.trim());
+      }
     }
-    if (driveFileId && driveFileId.trim()) {
-      return [driveFileId.trim()];
-    }
-    return [];
+    return baseList.slice(0, 3);
   })();
 
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   const safeIndex = activeVideoIndex < resolvedVideos.length ? activeVideoIndex : 0;
   const targetId = customYoutubeLiveUrl || resolvedVideos[safeIndex] || '';
   const previewUrl = targetId ? getDrivePreviewUrl(targetId) : '';
+  const showInstantBlobVideo = Boolean(localReplayBlobUrl && (preferLocalReplay || !previewUrl));
 
   // 권한 부족 시 잠금 안내 화면
   if (!canView) {
@@ -120,7 +134,7 @@ export function VideoPlayer({
             }`}
           >
             <Video className="w-3.5 h-3.5" />
-            <span>🎬 강의 영상 / 유튜브 라이브</span>
+            <span>🎬 강의 다시보기 / 영상 시청</span>
           </button>
           <button
             type="button"
@@ -137,13 +151,24 @@ export function VideoPlayer({
         </div>
 
         {isAdmin && playerMode === 'vod' && (
-          <button
-            type="button"
-            onClick={() => setPlayerMode('live')}
-            className="text-[11px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1"
-          >
-            <span>⚡ 지금 노트북 화면공유 + 스마트폰 라이브 켜기 →</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <a
+              href={GOOGLE_DRIVE_FOLDER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+            >
+              <FolderUp className="w-3.5 h-3.5" />
+              <span>다시보기 구글 드라이브 폴더 열기</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => setPlayerMode('live')}
+              className="text-[11px] text-red-400 hover:text-red-300 font-bold flex items-center gap-1"
+            >
+              <span>⚡ 지금 노트북 화면공유 + 스마트폰 라이브 켜기 →</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -156,40 +181,78 @@ export function VideoPlayer({
             setCustomYoutubeLiveUrl(ytUrl);
             setPlayerMode('vod');
           }}
+          onSaveReplayVideo={(driveUrlOrId, blobUrl) => {
+            if (driveUrlOrId && driveUrlOrId.trim()) {
+              setSavedDriveReplayId(driveUrlOrId.trim());
+              setPreferLocalReplay(false);
+              onSaveReplayVideo?.(driveUrlOrId.trim());
+            } else if (blobUrl) {
+              setPreferLocalReplay(true);
+            }
+            if (blobUrl) {
+              setLocalReplayBlobUrl(blobUrl);
+            }
+            setCustomYoutubeLiveUrl('');
+            setActiveVideoIndex(0);
+            setPlayerMode('vod');
+          }}
         />
       ) : (
         <>
-          {/* 다중 동영상(2~3개) 등록 시 상단 영상 선택 탭 */}
-          {resolvedVideos.length > 1 && (
+          {/* 다중 동영상(2~3개) 또는 방금 녹화된 다시보기 전환 바 */}
+          {(resolvedVideos.length > 1 || localReplayBlobUrl) && (
             <div className="px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs text-gray-300 font-semibold">
                 <Film className="w-3.5 h-3.5 text-carrot" />
-                <span>강의 영상 선택 ({resolvedVideos.length}개):</span>
+                <span>다시보기 영상 선택:</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {resolvedVideos.map((_, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => {
+                      setPreferLocalReplay(false);
                       setCustomYoutubeLiveUrl('');
                       setActiveVideoIndex(idx);
                     }}
                     className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                      !customYoutubeLiveUrl && safeIndex === idx
+                      !showInstantBlobVideo && !customYoutubeLiveUrl && safeIndex === idx
                         ? 'bg-carrot text-white shadow-xs'
                         : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
                     }`}
                   >
-                    영상 #{idx + 1}
+                    {idx === 0 && savedDriveReplayId ? '구글 드라이브 다시보기 #1' : `영상 #${idx + 1}`}
                   </button>
                 ))}
+                {localReplayBlobUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setPreferLocalReplay(true)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
+                      showInstantBlobVideo
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-gray-800 text-emerald-300 hover:bg-gray-700'
+                    }`}
+                  >
+                    방금 방송 즉시 다시보기
+                  </button>
+                )}
               </div>
             </div>
           )}
 
           <div className="w-full aspect-video relative bg-black">
-            {previewUrl ? (
+            {showInstantBlobVideo && localReplayBlobUrl ? (
+              <video
+                key={localReplayBlobUrl}
+                src={localReplayBlobUrl}
+                controls
+                autoPlay
+                playsInline
+                className="w-full h-full object-contain bg-black"
+              />
+            ) : previewUrl ? (
               <iframe
                 key={previewUrl}
                 src={previewUrl}
@@ -219,7 +282,7 @@ export function VideoPlayer({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span className="text-gray-700 font-medium">
-                실시간 고화질 스트리밍 지원 (구글 드라이브 & 유튜브 라이브 연동)
+                실시간 고화질 다시보기 스트리밍 지원 (구글 드라이브 & 유튜브 라이브 연동)
                 {resolvedVideos.length > 1 ? ` (현재 영상 #${safeIndex + 1} / 총 ${resolvedVideos.length}개)` : ''}
               </span>
             </div>

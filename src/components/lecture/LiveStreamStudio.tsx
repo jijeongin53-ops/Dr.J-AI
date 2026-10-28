@@ -25,13 +25,25 @@ import {
   Youtube,
   Volume2,
   VolumeX,
+  Power,
+  FolderUp,
+  Trash2,
+  ExternalLink,
+  Loader2,
+  PlayCircle,
 } from 'lucide-react';
+import {
+  GOOGLE_DRIVE_FOLDER_ID,
+  GOOGLE_DRIVE_FOLDER_URL,
+  GOOGLE_APPS_SCRIPT_DEFAULT_URL,
+} from '@/lib/constants';
 
 interface LiveStreamStudioProps {
   lectureId: string;
   lectureTitle: string;
   isAdmin: boolean;
   onSaveYoutubeLiveUrl?: (url: string) => void;
+  onSaveReplayVideo?: (videoUrlOrId: string, localBlobUrl?: string) => void;
 }
 
 type StudioDeviceRole = 'viewer' | 'laptop' | 'phone';
@@ -69,6 +81,7 @@ export function LiveStreamStudio({
   lectureTitle,
   isAdmin,
   onSaveYoutubeLiveUrl,
+  onSaveReplayVideo,
 }: LiveStreamStudioProps) {
   // URL 파라미터(?liveMode=phone&adminKey=drjlive)로 스마트폰 QR 접속 시 즉시 스마트폰 관리자 모드 활성화
   const [qrAdminUnlocked, setQrAdminUnlocked] = useState(false);
@@ -94,6 +107,12 @@ export function LiveStreamStudio({
   const [recordedBlobUrl, setRecordedBlobUrl] = useState<string | null>(null);
   const [recordedFileName, setRecordedFileName] = useState<string>('');
   const [recordMode, setRecordMode] = useState<'cam' | 'composite'>('cam');
+
+  // 방송 끄기 및 구글 드라이브 다시보기 저장 모달 상태
+  const [showEndBroadcastModal, setShowEndBroadcastModal] = useState(false);
+  const [driveUploadStatus, setDriveUploadStatus] = useState<'idle' | 'uploading' | 'manual_link' | 'done'>('idle');
+  const [driveUploadMessage, setDriveUploadMessage] = useState<string>('');
+  const [manualDriveLinkInput, setManualDriveLinkInput] = useState<string>('');
 
   // 연결 상태 및 QR 모달
   const [statusText, setStatusText] = useState<string>('실시간 방송 연결 대기 중...');
@@ -122,6 +141,9 @@ export function LiveStreamStudio({
   // 녹화용 Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const recordedBlobRef = useRef<Blob | null>(null);
+  const shouldAutoDownloadOnStopRef = useRef<boolean>(false);
+  const recordStopResolverRef = useRef<((blob: Blob | null) => void) | null>(null);
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const compositeCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const compositeAnimRef = useRef<number | null>(null);
@@ -294,15 +316,20 @@ export function LiveStreamStudio({
         audio: true,
       });
 
-      // 공유 중단 버튼(브라우저 기본 바) 클릭 감지
+      // 공유 중단 버튼(브라우저 기본 바) 클릭 감지 -> 방송 끄기 및 저장 선택 모달 표시
       displayStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        stopLaptopScreenShare();
+        handleTurnOffBroadcast();
       });
 
       localScreenStreamRef.current = displayStream;
       setIsScreenSharing(true);
       setStatusText('🔴 내 노트북 화면을 실시간으로 공유 중입니다');
       attachStreamsToVideoElements();
+
+      // 방송 시작 시 다시보기 저장을 위해 백그라운드 자동 녹화 시작
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        startBroadcastRecordingInternal(displayStream);
+      }
 
       const PeerClass = await loadPeerJsScript();
       if (screenHostPeerRef.current) {
@@ -378,6 +405,11 @@ export function LiveStreamStudio({
       setStatusText('🔴 스마트폰 카메라 및 음성을 실시간 송출 중입니다');
       attachStreamsToVideoElements();
 
+      // 방송 시작 시 다시보기 저장을 위해 백그라운드 자동 녹화 시작
+      if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') {
+        startBroadcastRecordingInternal(camStream);
+      }
+
       const PeerClass = await loadPeerJsScript();
       if (camHostPeerRef.current) {
         camHostPeerRef.current.destroy();
@@ -402,7 +434,7 @@ export function LiveStreamStudio({
           } else if (data?.type === 'REMOTE_START_RECORD') {
             startPhoneRecording();
           } else if (data?.type === 'REMOTE_STOP_RECORD') {
-            stopPhoneRecording();
+            stopPhoneRecording(true);
           } else if (data?.type === 'REMOTE_TOGGLE_FACING') {
             toggleCameraFacing();
           }
@@ -420,9 +452,6 @@ export function LiveStreamStudio({
   };
 
   const stopPhoneCameraStream = () => {
-    if (isRecording) {
-      stopPhoneRecording();
-    }
     localCamStreamRef.current?.getTracks().forEach((t) => t.stop());
     localCamStreamRef.current = null;
     camHostPeerRef.current?.destroy?.();
@@ -451,25 +480,10 @@ export function LiveStreamStudio({
     }
   };
 
-  // 스마트폰에서 실시간 영상 녹화 시작 (스마트폰 단독 녹화 또는 노트북+스마트폰 합본 녹화)
-  const startPhoneRecording = async () => {
-    let targetStream = localCamStreamRef.current || remoteCamStreamRef.current;
-
-    // 아직 스마트폰 카메라가 켜지지 않은 상태에서 녹화를 누르면 자동으로 카메라 먼저 켜기
-    if (!targetStream) {
-      try {
-        await startPhoneCameraStream(facingMode);
-        targetStream = localCamStreamRef.current;
-      } catch (_) {}
-    }
-
-    if (!targetStream) {
-      alert('녹화할 영상 스트림이 없습니다. 먼저 카메라 송출을 시작해 주세요.');
-      return;
-    }
-
+  // 내부 스트림 녹화 시작 헬퍼 (노트북 화면 공유 또는 스마트폰 카메라 스트림)
+  const startBroadcastRecordingInternal = (baseStream: MediaStream) => {
     try {
-      let streamToRecord = targetStream;
+      let streamToRecord = baseStream;
 
       // 합본(노트북 화면 + 스마트폰 PIP) 녹화 모드이고 노트북 화면이 수신 중일 때 Canvas 합성 스트림 생성
       const screenEl = screenVideoRef.current;
@@ -509,12 +523,14 @@ export function LiveStreamStudio({
 
         const canvasStream = canvas.captureStream(30);
         // 오디오 트랙 병합
-        targetStream.getAudioTracks().forEach((track) => canvasStream.addTrack(track));
+        baseStream.getAudioTracks().forEach((track) => canvasStream.addTrack(track));
         streamToRecord = canvasStream;
       }
 
       recordedChunksRef.current = [];
+      recordedBlobRef.current = null;
       setRecordedBlobUrl(null);
+      shouldAutoDownloadOnStopRef.current = false;
 
       // 모바일 브라우저(iOS Safari / Android Chrome) 호환성 높은 MIME 타입 자동 선택
       const mimeTypes = [
@@ -552,18 +568,26 @@ export function LiveStreamStudio({
           now.getMinutes()
         ).padStart(2, '0')}`;
         const safeTitle = (lectureTitle || '라이브강의').replace(/[^가-힣a-zA-Z0-9_-]/g, '_');
-        const fileName = `DrJ_${safeTitle}_${dateStr}.${ext}`;
+        const fileName = `DrJ_다시보기_${safeTitle}_${dateStr}.${ext}`;
 
+        recordedBlobRef.current = blob;
         setRecordedBlobUrl(url);
         setRecordedFileName(fileName);
 
-        // 녹화 종료 즉시 스마트폰(또는 기기)에 파일 자동 다운로드 실행
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        // 수동 녹화 완료 버튼 클릭 시에만 즉시 기기 다운로드 실행 (방송 끄기 클릭 시에는 모달 선택에 따름)
+        if (shouldAutoDownloadOnStopRef.current) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+
+        if (recordStopResolverRef.current) {
+          recordStopResolverRef.current(blob);
+          recordStopResolverRef.current = null;
+        }
       };
 
       recorder.start(1000);
@@ -575,20 +599,183 @@ export function LiveStreamStudio({
       recordTimerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
-      alert('이 브라우저에서 영상 녹화를 시작하는 중 오류가 발생했습니다.');
-    }
+    } catch (_) {}
   };
 
-  const stopPhoneRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+  // 스마트폰에서 실시간 영상 녹화 시작 (스마트폰 단독 녹화 또는 노트북+스마트폰 합본 녹화)
+  const startPhoneRecording = async () => {
+    let targetStream =
+      localCamStreamRef.current ||
+      remoteCamStreamRef.current ||
+      localScreenStreamRef.current ||
+      remoteScreenStreamRef.current;
+
+    // 아직 스마트폰 카메라가 켜지지 않은 상태에서 녹화를 누르면 자동으로 카메라 먼저 켜기
+    if (!targetStream) {
+      try {
+        await startPhoneCameraStream(facingMode);
+        targetStream = localCamStreamRef.current;
+      } catch (_) {}
     }
-    setIsRecording(false);
-    if (recordTimerRef.current) {
-      clearInterval(recordTimerRef.current);
-      recordTimerRef.current = null;
+
+    if (!targetStream) {
+      alert('녹화할 영상 스트림이 없습니다. 먼저 카메라 송출 또는 화면 공유를 시작해 주세요.');
+      return;
     }
+
+    startBroadcastRecordingInternal(targetStream);
+  };
+
+  const stopPhoneRecording = (autoDownload = true): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      shouldAutoDownloadOnStopRef.current = autoDownload;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        recordStopResolverRef.current = resolve;
+        mediaRecorderRef.current.stop();
+      } else {
+        resolve(recordedBlobRef.current);
+      }
+      setIsRecording(false);
+      if (recordTimerRef.current) {
+        clearInterval(recordTimerRef.current);
+        recordTimerRef.current = null;
+      }
+    });
+  };
+
+  // ============================================================================
+  // 4. [방송 끄기] & 구글 드라이브(1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo) 다시보기 저장 / 저장하지 않기
+  // ============================================================================
+  const handleTurnOffBroadcast = async () => {
+    // 1) 진행 중인 녹화를 먼저 안전하게 마무리하여 Blob 생성 (즉시 다운로드는 보류하고 선택지 모달 표시)
+    await stopPhoneRecording(false);
+
+    // 2) 노트북 화면 공유 및 스마트폰 카메라 스트림 모두 종료
+    stopLaptopScreenShare();
+    stopPhoneCameraStream();
+    remoteScreenStreamRef.current = null;
+    remoteCamStreamRef.current = null;
+    setHasRemoteScreen(false);
+    setHasRemoteCam(false);
+    setStatusText('방송이 종료되었습니다. 다시보기 저장 여부를 선택해 주세요.');
+
+    // 3) 구글 드라이브에 저장하기 vs 저장하지 않기 선택 모달 열기
+    setDriveUploadStatus('idle');
+    setDriveUploadMessage('');
+    setShowEndBroadcastModal(true);
+  };
+
+  // [선택 1]: 구글 드라이브(1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo)에 저장하기 & 다시보기 자동 등록
+  const handleSaveToGoogleDrive = async () => {
+    setDriveUploadStatus('uploading');
+    setDriveUploadMessage(
+      '지정된 구글 드라이브 폴더(1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo)에 영상을 업로드하고 다시보기로 등록하는 중입니다...'
+    );
+
+    const blob = recordedBlobRef.current;
+    const blobUrl = recordedBlobUrl;
+    const fileName =
+      recordedFileName ||
+      `DrJ_다시보기_${(lectureTitle || '라이브강의').replace(/[^가-힣a-zA-Z0-9_-]/g, '_')}_${Date.now()}.webm`;
+
+    // 기기에도 안전하게 영상 파일 백업 다운로드 실행
+    if (blobUrl) {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    // 녹화된 Blob이 있고 용량이 Apps Script 전송 가능 범위(35MB 이하)일 때 자동 업로드 시도
+    if (blob && blob.size > 0 && blob.size <= 35 * 1024 * 1024) {
+      try {
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = String(reader.result || '');
+            const commaIdx = res.indexOf(',');
+            resolve(commaIdx >= 0 ? res.slice(commaIdx + 1) : res);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        const gasUrl =
+          (typeof window !== 'undefined' ? localStorage.getItem('DR_J_GAS_URL') : '') ||
+          GOOGLE_APPS_SCRIPT_DEFAULT_URL;
+
+        const response = await fetch(gasUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({
+            action: 'uploadDriveVideo',
+            folderId: GOOGLE_DRIVE_FOLDER_ID,
+            lectureId,
+            fileName,
+            mimeType: blob.type || 'video/webm',
+            base64Data,
+          }),
+        });
+
+        const data = await response.json();
+        if (response.ok && data?.result === 'success' && data?.fileId) {
+          onSaveReplayVideo?.(data.fileId, blobUrl || undefined);
+          setDriveUploadStatus('done');
+          setDriveUploadMessage(
+            '✅ 구글 드라이브 폴더 저장 및 강의 다시보기 등록이 완료되었습니다!'
+          );
+          setTimeout(() => {
+            setShowEndBroadcastModal(false);
+          }, 1200);
+          return;
+        }
+      } catch (_) {
+        // 대용량 영상이거나 Apps Script Drive 권한 재배포 전인 경우 폴더 직행 + 즉시 다시보기 등록 단계로 전환
+      }
+    }
+
+    // 대용량이거나 직접 폴더 업로드가 필요한 경우: 지정된 구글 드라이브 폴더를 즉시 새 창으로 열고 다시보기 연결 지원
+    if (typeof window !== 'undefined') {
+      window.open(GOOGLE_DRIVE_FOLDER_URL, '_blank', 'noopener,noreferrer');
+    }
+    setDriveUploadStatus('manual_link');
+    setDriveUploadMessage(
+      '녹화 영상 파일이 기기에 저장되었고, 지정된 구글 드라이브 폴더가 열렸습니다! 폴더에 파일을 올리신 뒤 아래에 링크를 붙여넣거나 [즉시 다시보기 전환]을 눌러주세요.'
+    );
+  };
+
+  // 구글 드라이브 폴더에 업로드한 파일 링크(또는 로컬 녹화본)로 즉시 다시보기 확정
+  const handleConfirmManualReplay = () => {
+    const targetUrl = manualDriveLinkInput.trim();
+    if (targetUrl) {
+      onSaveReplayVideo?.(targetUrl, recordedBlobUrl || undefined);
+      setShowEndBroadcastModal(false);
+      setManualDriveLinkInput('');
+      return;
+    }
+    if (recordedBlobUrl) {
+      onSaveReplayVideo?.('', recordedBlobUrl);
+      setShowEndBroadcastModal(false);
+      return;
+    }
+    alert('구글 드라이브에 업로드한 영상의 공유 링크(또는 파일 ID)를 입력해 주세요.');
+  };
+
+  // [선택 2]: 저장하지 않기 (녹화 데이터 폐기 및 방송 완전 종료)
+  const handleDiscardBroadcastRecording = () => {
+    if (recordedBlobUrl) {
+      URL.revokeObjectURL(recordedBlobUrl);
+    }
+    recordedChunksRef.current = [];
+    recordedBlobRef.current = null;
+    setRecordedBlobUrl(null);
+    setRecordedFileName('');
+    setShowEndBroadcastModal(false);
+    setDriveUploadStatus('idle');
+    setDriveUploadMessage('');
+    setStatusText('방송이 저장하지 않고 종료되었습니다.');
   };
 
   const formatTimer = (sec: number) => {
@@ -642,31 +829,46 @@ export function LiveStreamStudio({
               )}
             </div>
 
-            {/* 현재 접속 기기 역할 전환 버튼 */}
-            <div className="flex items-center gap-1.5 bg-gray-950 p-1 rounded-xl border border-gray-800">
+            {/* 현재 접속 기기 역할 전환 버튼 & 방송 끄기 버튼 */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-gray-950 p-1 rounded-xl border border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setDeviceRole('laptop')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    deviceRole === 'laptop'
+                      ? 'bg-carrot text-white shadow-xs'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>1. 내 노트북 (화면 공유)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeviceRole('phone')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+                    deviceRole === 'phone'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>2. 내 스마트폰 (영상/녹화)</span>
+                </button>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setDeviceRole('laptop')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                  deviceRole === 'laptop'
-                    ? 'bg-carrot text-white shadow-xs'
-                    : 'text-gray-400 hover:text-white'
+                onClick={handleTurnOffBroadcast}
+                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-md ${
+                  isAnyLive || isRecording
+                    ? 'bg-red-600 hover:bg-red-700 text-white ring-2 ring-red-400/50 animate-pulse'
+                    : 'bg-red-950/90 hover:bg-red-700 text-red-200 border border-red-500/40'
                 }`}
               >
-                <Monitor className="w-3.5 h-3.5" />
-                <span>1. 내 노트북 (화면 공유)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeviceRole('phone')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
-                  deviceRole === 'phone'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                <span>2. 내 스마트폰 (영상/녹화)</span>
+                <Power className="w-3.5 h-3.5" />
+                <span>⏹ 방송 끄기</span>
               </button>
             </div>
           </div>
@@ -706,11 +908,11 @@ export function LiveStreamStudio({
                   ) : (
                     <button
                       type="button"
-                      onClick={stopLaptopScreenShare}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition"
+                      onClick={handleTurnOffBroadcast}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
                     >
-                      <Square className="w-4 h-4" />
-                      <span>노트북 화면 공유 종료</span>
+                      <Power className="w-4 h-4" />
+                      <span>⏹ 방송 끄기 (구글 드라이브 다시보기 저장 선택)</span>
                     </button>
                   )}
                 </div>
@@ -812,11 +1014,11 @@ export function LiveStreamStudio({
                   ) : (
                     <button
                       type="button"
-                      onClick={stopPhoneCameraStream}
-                      className="flex-1 py-3 px-4 rounded-xl bg-gray-800 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition border border-gray-700"
+                      onClick={handleTurnOffBroadcast}
+                      className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
                     >
-                      <VideoOff className="w-4 h-4 text-red-400" />
-                      <span>카메라 송출 중지</span>
+                      <Power className="w-4 h-4" />
+                      <span>⏹ 방송 끄기 (구글 드라이브 저장 선택)</span>
                     </button>
                   )}
 
@@ -844,7 +1046,7 @@ export function LiveStreamStudio({
                   </button>
                 </div>
 
-                {/* 스마트폰 녹화 시작/종료 버튼 */}
+                {/* 스마트폰 녹화 시작/방송 끄기 버튼 */}
                 <div className="flex items-center gap-2">
                   {!isRecording ? (
                     <button
@@ -858,11 +1060,11 @@ export function LiveStreamStudio({
                   ) : (
                     <button
                       type="button"
-                      onClick={stopPhoneRecording}
+                      onClick={handleTurnOffBroadcast}
                       className="flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-gray-950 text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-md animate-pulse"
                     >
-                      <Square className="w-4 h-4 fill-current" />
-                      <span>⏹ 녹화 완료 및 내 스마트폰에 저장 ({formatTimer(recordingSeconds)})</span>
+                      <Power className="w-4 h-4" />
+                      <span>⏹ 방송 끄기 및 다시보기 저장 선택 ({formatTimer(recordingSeconds)})</span>
                     </button>
                   )}
                 </div>
@@ -1094,6 +1296,18 @@ export function LiveStreamStudio({
           >
             <Maximize2 className="w-4 h-4" />
           </button>
+
+          {/* 관리자 하단 빠른 방송 끄기 버튼 */}
+          {effectiveAdmin && (isAnyLive || isRecording) && (
+            <button
+              type="button"
+              onClick={handleTurnOffBroadcast}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold flex items-center gap-1 transition shadow-sm"
+            >
+              <Power className="w-3.5 h-3.5" />
+              <span>방송 끄기</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1148,6 +1362,141 @@ export function LiveStreamStudio({
                 닫기
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. 방송 끄기 클릭 시 — 구글 드라이브(1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo) 저장하기 vs 저장하지 않기 선택 모달 */}
+      {showEndBroadcastModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs animate-fadeIn"
+          onClick={() => {
+            if (driveUploadStatus !== 'uploading') setShowEndBroadcastModal(false);
+          }}
+        >
+          <div
+            className="bg-white text-gray-900 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center shrink-0">
+                <Power className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-gray-950">
+                  라이브 방송이 종료되었습니다
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  방금 진행한 방송 영상을 구글 드라이브에 저장하여 <strong>다시보기</strong>로 등록할까요?
+                </p>
+              </div>
+            </div>
+
+            {/* 저장 대상 구글 드라이브 폴더 안내 박스 */}
+            <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                  <FolderUp className="w-4 h-4 text-carrot" />
+                  <span>저장 대상 구글 드라이브 폴더</span>
+                </span>
+                <a
+                  href={GOOGLE_DRIVE_FOLDER_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold text-carrot hover:underline flex items-center gap-1"
+                >
+                  <span>폴더 열기</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+              <p className="text-[11px] text-gray-600 break-all font-mono bg-white/80 px-2.5 py-1.5 rounded-lg border border-blue-100">
+                {GOOGLE_DRIVE_FOLDER_URL}
+              </p>
+              <p className="text-[11px] text-blue-800">
+                • <strong>구글 드라이브에 저장하기</strong>를 선택하면 위 폴더에 영상이 저장되며 본 강의실의 <strong>다시보기 영상</strong>으로 즉시 전환됩니다.
+              </p>
+            </div>
+
+            {driveUploadStatus === 'idle' && (
+              <div className="grid grid-cols-1 gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveToGoogleDrive}
+                  className="w-full py-3.5 px-4 rounded-2xl bg-carrot hover:bg-blue-700 text-white text-sm font-extrabold flex items-center justify-center gap-2 transition shadow-lg"
+                >
+                  <FolderUp className="w-4 h-4" />
+                  <span>1. 구글 드라이브에 저장하기 (다시보기 자동 등록)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDiscardBroadcastRecording}
+                  className="w-full py-3 px-4 rounded-2xl bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 border border-gray-200 text-xs font-bold flex items-center justify-center gap-2 transition"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>2. 저장하지 않기 (녹화본 삭제 및 그냥 종료)</span>
+                </button>
+              </div>
+            )}
+
+            {driveUploadStatus === 'uploading' && (
+              <div className="p-5 rounded-2xl bg-gray-50 border border-gray-200 text-center space-y-3">
+                <Loader2 className="w-8 h-8 text-carrot animate-spin mx-auto" />
+                <p className="text-xs font-bold text-gray-800 leading-relaxed">
+                  {driveUploadMessage}
+                </p>
+              </div>
+            )}
+
+            {driveUploadStatus === 'done' && (
+              <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                <p className="text-xs font-extrabold text-emerald-900">
+                  {driveUploadMessage}
+                </p>
+              </div>
+            )}
+
+            {driveUploadStatus === 'manual_link' && (
+              <div className="space-y-3 pt-1">
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 leading-relaxed">
+                  ✅ <strong>1단계 완료:</strong> 녹화 파일(<code>{recordedFileName || 'DrJ_다시보기.webm'}</code>)이 기기에 저장되었고 지정하신 <strong>구글 드라이브 폴더</strong>가 새 창으로 열렸습니다.
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-gray-800">
+                    폴더에 업로드한 구글 드라이브 영상 링크 붙여넣기 (선택)
+                  </label>
+                  <input
+                    type="text"
+                    value={manualDriveLinkInput}
+                    onChange={(e) => setManualDriveLinkInput(e.target.value)}
+                    placeholder="https://drive.google.com/file/d/.../view 붙여넣기"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-xs text-gray-900 focus:outline-none focus:border-carrot"
+                  />
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConfirmManualReplay}
+                    className="flex-1 py-3 px-4 rounded-xl bg-carrot hover:bg-blue-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition shadow-md"
+                  >
+                    <PlayCircle className="w-4 h-4" />
+                    <span>다시보기 영상으로 즉시 적용하기</span>
+                  </button>
+                  <a
+                    href={GOOGLE_DRIVE_FOLDER_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-3 px-4 rounded-xl border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold flex items-center justify-center gap-1"
+                  >
+                    <span>구글 드라이브 폴더 다시 열기</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

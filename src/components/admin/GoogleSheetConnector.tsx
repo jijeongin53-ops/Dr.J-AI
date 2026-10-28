@@ -439,6 +439,45 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    // [ACTION 9]: 라이브 방송 종료 시 녹화 영상을 지정된 구글 드라이브 폴더(1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo)에 자동 저장 및 다시보기 등록
+    if (action === "uploadDriveVideo") {
+      var targetFolderId = data.folderId || "1dFvRKioEs7YtYYTp_EFk8H6YXi-V_EHo";
+      var folder = DriveApp.getFolderById(targetFolderId);
+      var decodedBytes = Utilities.base64Decode(data.base64Data);
+      var mimeType = data.mimeType || "video/webm";
+      var fileName = data.fileName || ("DrJ_다시보기_" + Utilities.formatDate(new Date(), "Asia/Seoul", "yyyyMMdd_HHmmss") + ".webm");
+      var blob = Utilities.newBlob(decodedBytes, mimeType, fileName);
+      var file = folder.createFile(blob);
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (shareErr) {}
+      var fileId = file.getId();
+      var fileUrl = "https://drive.google.com/file/d/" + fileId + "/view?usp=sharing";
+
+      if (data.lectureId) {
+        var lecSheet = ss.getSheetByName("동영상 업로드 현황");
+        if (lecSheet && lecSheet.getLastRow() > 1) {
+          var lecValues = lecSheet.getDataRange().getValues();
+          for (var r = 1; r < lecValues.length; r++) {
+            if (String(lecValues[r][0]).trim() === String(data.lectureId).trim()) {
+              var existingVideo = String(lecValues[r][5] || "").trim();
+              var updatedVideo = existingVideo ? (fileId + "\n" + existingVideo) : fileId;
+              lecSheet.getRange(r + 1, 6).setValue(updatedVideo);
+              break;
+            }
+          }
+        }
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        result: "success",
+        action: "uploadDriveVideo",
+        fileId: fileId,
+        fileUrl: fileUrl,
+        folderUrl: "https://drive.google.com/drive/folders/" + targetFolderId
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(JSON.stringify({ result: "ignored", message: "미처리 액션: " + action }))
       .setMimeType(ContentService.MimeType.JSON);
 
