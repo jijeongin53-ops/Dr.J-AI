@@ -170,12 +170,14 @@ export default function LectureDetailPage() {
       {/* 1. 구글 드라이브 비디오 플레이어 */}
       <section>
         <VideoPlayer
+          lectureId={lecture.id}
           title={lecture.title}
           driveFileId={lecture.driveFileId}
           videoUrl={lecture.videoUrl}
           videoUrls={lecture.videoUrls}
           minViewRole={lecture.minViewRole}
           userRole={currentUser?.role}
+          userName={currentUser?.name}
         />
       </section>
 

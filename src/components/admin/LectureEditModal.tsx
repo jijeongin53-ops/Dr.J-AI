@@ -359,7 +359,7 @@ export function LectureEditModal({
                   강의 동영상 링크 목록 ({videoUrls.length}/{MAX_VIDEOS}개)
                 </label>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  구글 드라이브 동영상 공유 링크 또는 파일 ID를 최대 {MAX_VIDEOS}개까지 추가할 수 있습니다.
+                  구글 드라이브 공유 링크(파일 ID) 또는 유튜브(실시간 라이브/일반 영상) 링크를 최대 {MAX_VIDEOS}개까지 추가할 수 있습니다.
                 </p>
               </div>
               <button
@@ -386,7 +386,7 @@ export function LectureEditModal({
                     type="text"
                     value={vUrl}
                     onChange={(e) => handleVideoChange(idx, e.target.value)}
-                    placeholder="https://drive.google.com/file/d/... 또는 파일ID"
+                    placeholder="구글 드라이브 링크/파일ID 또는 https://youtube.com/live/..."
                     className="flex-1 bg-white border border-gray-300 rounded-xl p-2 text-xs text-gray-900 focus:outline-none focus:border-carrot"
                   />
                   <button
