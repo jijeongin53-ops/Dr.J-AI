@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { MemberRole } from '@/types';
 import { hasRequiredRole, getDrivePreviewUrl } from '@/lib/google/drive';
 import { GOOGLE_DRIVE_FOLDER_URL } from '@/lib/constants';
-import { Lock, Play, ExternalLink, Film, Radio, Video, FolderUp } from 'lucide-react';
+import { Lock, Play, ExternalLink, Film, Radio, Video, FolderUp, Power } from 'lucide-react';
 import Link from 'next/link';
 import { LiveStreamStudio } from './LiveStreamStudio';
 
@@ -37,6 +37,7 @@ export function VideoPlayer({
   const [savedDriveReplayId, setSavedDriveReplayId] = useState<string>('');
   const [localReplayBlobUrl, setLocalReplayBlobUrl] = useState<string | null>(null);
   const [preferLocalReplay, setPreferLocalReplay] = useState<boolean>(false);
+  const [endBroadcastSignal, setEndBroadcastSignal] = useState<number>(0);
 
   const isAdmin = userRole === 'admin' || userName === '지정인' || qrAdminBypass;
   const canView = hasRequiredRole(userRole, minViewRole) || qrAdminBypass;
@@ -123,7 +124,7 @@ export function VideoPlayer({
     <div className="w-full rounded-2xl overflow-hidden border border-gray-200 bg-black shadow-lg">
       {/* 상단 모드 전환 바: 녹화/유튜브 영상 시청 vs 실시간 라이브 스튜디오 (노트북 화면공유 + 스마트폰 영상/녹화) */}
       <div className="px-4 py-2.5 bg-gray-950 border-b border-gray-800 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setPlayerMode('vod')}
@@ -148,19 +149,30 @@ export function VideoPlayer({
             <Radio className={`w-3.5 h-3.5 ${playerMode === 'live' ? 'animate-pulse' : 'text-red-400'}`} />
             <span>🔴 실시간 화면공유 & 스마트폰 라이브</span>
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPlayerMode('live');
+              setEndBroadcastSignal((prev) => prev + 1);
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition shadow-md border border-red-400/50"
+          >
+            <Power className="w-3.5 h-3.5" />
+            <span>⏹ 방송 끄기</span>
+          </button>
         </div>
 
-        {isAdmin && playerMode === 'vod' && (
-          <div className="flex items-center gap-3">
-            <a
-              href={GOOGLE_DRIVE_FOLDER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
-            >
-              <FolderUp className="w-3.5 h-3.5" />
-              <span>다시보기 구글 드라이브 폴더 열기</span>
-            </a>
+        <div className="flex items-center gap-3">
+          <a
+            href={GOOGLE_DRIVE_FOLDER_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1"
+          >
+            <FolderUp className="w-3.5 h-3.5" />
+            <span>다시보기 구글 드라이브 폴더 열기</span>
+          </a>
+          {playerMode === 'vod' && (
             <button
               type="button"
               onClick={() => setPlayerMode('live')}
@@ -168,8 +180,8 @@ export function VideoPlayer({
             >
               <span>⚡ 지금 노트북 화면공유 + 스마트폰 라이브 켜기 →</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {playerMode === 'live' ? (
@@ -177,6 +189,7 @@ export function VideoPlayer({
           lectureId={lectureId}
           lectureTitle={title}
           isAdmin={isAdmin}
+          externalEndBroadcastTrigger={endBroadcastSignal}
           onSaveYoutubeLiveUrl={(ytUrl) => {
             setCustomYoutubeLiveUrl(ytUrl);
             setPlayerMode('vod');

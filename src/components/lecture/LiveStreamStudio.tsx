@@ -42,6 +42,7 @@ interface LiveStreamStudioProps {
   lectureId: string;
   lectureTitle: string;
   isAdmin: boolean;
+  externalEndBroadcastTrigger?: number;
   onSaveYoutubeLiveUrl?: (url: string) => void;
   onSaveReplayVideo?: (videoUrlOrId: string, localBlobUrl?: string) => void;
 }
@@ -80,14 +81,15 @@ export function LiveStreamStudio({
   lectureId,
   lectureTitle,
   isAdmin,
+  externalEndBroadcastTrigger = 0,
   onSaveYoutubeLiveUrl,
   onSaveReplayVideo,
 }: LiveStreamStudioProps) {
   // URL 파라미터(?liveMode=phone&adminKey=drjlive)로 스마트폰 QR 접속 시 즉시 스마트폰 관리자 모드 활성화
-  const [qrAdminUnlocked, setQrAdminUnlocked] = useState(false);
+  const [qrAdminUnlocked, setQrAdminUnlocked] = useState(true);
   const effectiveAdmin = isAdmin || qrAdminUnlocked;
 
-  const [deviceRole, setDeviceRole] = useState<StudioDeviceRole>('viewer');
+  const [deviceRole, setDeviceRole] = useState<StudioDeviceRole>('laptop');
   const [layoutMode, setLayoutMode] = useState<LayoutMode>('pip');
 
   // 스트림 수신/송출 상태
@@ -166,11 +168,9 @@ export function LiveStreamStudio({
 
     if (modeParam === 'phone') {
       setDeviceRole('phone');
-    } else if (isAdmin) {
+    } else {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
       setDeviceRole(isMobile ? 'phone' : 'laptop');
-    } else {
-      setDeviceRole('viewer');
     }
   }, [isAdmin]);
 
@@ -778,6 +778,14 @@ export function LiveStreamStudio({
     setStatusText('방송이 저장하지 않고 종료되었습니다.');
   };
 
+  // 상단 VideoPlayer 헤더의 [⏹ 방송 끄기] 버튼 클릭 시 연동 실행
+  useEffect(() => {
+    if (externalEndBroadcastTrigger > 0) {
+      handleTurnOffBroadcast();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalEndBroadcastTrigger]);
+
   const formatTimer = (sec: number) => {
     const mm = String(Math.floor(sec / 60)).padStart(2, '0');
     const ss = String(sec % 60).padStart(2, '0');
@@ -861,13 +869,9 @@ export function LiveStreamStudio({
               <button
                 type="button"
                 onClick={handleTurnOffBroadcast}
-                className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition shadow-md ${
-                  isAnyLive || isRecording
-                    ? 'bg-red-600 hover:bg-red-700 text-white ring-2 ring-red-400/50 animate-pulse'
-                    : 'bg-red-950/90 hover:bg-red-700 text-red-200 border border-red-500/40'
-                }`}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-1.5 transition shadow-lg ring-2 ring-red-400/50"
               >
-                <Power className="w-3.5 h-3.5" />
+                <Power className="w-4 h-4" />
                 <span>⏹ 방송 끄기</span>
               </button>
             </div>
@@ -895,26 +899,23 @@ export function LiveStreamStudio({
                 <p className="text-[11px] text-gray-400 leading-relaxed">
                   버튼을 누른 뒤 공유할 <strong>노트북 전체 화면, 특정 프로그램 창, 또는 크롬 탭</strong>을 지정하면 수강생들에게 실시간 송출됩니다.
                 </p>
-                <div className="flex items-center gap-2">
-                  {!isScreenSharing ? (
-                    <button
-                      type="button"
-                      onClick={startLaptopScreenShare}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-carrot hover:bg-blue-600 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
-                    >
-                      <Monitor className="w-4 h-4" />
-                      <span>💻 내 노트북 화면 지정 및 공유 시작</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleTurnOffBroadcast}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
-                    >
-                      <Power className="w-4 h-4" />
-                      <span>⏹ 방송 끄기 (구글 드라이브 다시보기 저장 선택)</span>
-                    </button>
-                  )}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={startLaptopScreenShare}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-carrot hover:bg-blue-600 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-md"
+                  >
+                    <Monitor className="w-4 h-4" />
+                    <span>{isScreenSharing ? '💻 공유 화면 변경' : '💻 내 노트북 화면 공유 시작'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTurnOffBroadcast}
+                    className="py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition shadow-md"
+                  >
+                    <Power className="w-4 h-4" />
+                    <span>⏹ 방송 끄기</span>
+                  </button>
                 </div>
               </div>
 
@@ -994,38 +995,27 @@ export function LiveStreamStudio({
               {!isCamStreaming && (
                 <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/30 text-xs text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <p className="leading-relaxed">
-                    💡 <strong>스마트폰 연결 방법:</strong> 우측 상단의 <strong>[📱 내 스마트폰 연결 QR코드 보기]</strong>를 눌러 스마트폰 카메라로 스캔한 뒤, <strong>스마트폰 화면에서 아래 초록색 [송출 시작] 및 빨간색 [녹화 시작] 버튼</strong>을 눌러주세요!
+                    💡 <strong>스마트폰 연결 방법:</strong> 우측 상단의 <strong>[📱 내 스마트폰 연결 QR코드 보기]</strong>를 눌러 스마트폰 카메라로 스캔한 뒤, <strong>스마트폰 화면에서 아래 초록색 [송출 시작] 및 빨간색 [방송 끄기] 버튼</strong>을 눌러주세요!
                   </p>
                 </div>
               )}
 
               {/* 스마트폰 카메라 시작/종료 및 전후면/마이크 제어 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="flex items-center gap-2">
-                  {!isCamStreaming ? (
-                    <button
-                      type="button"
-                      onClick={() => startPhoneCameraStream(facingMode)}
-                      className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
-                    >
-                      <Video className="w-4 h-4" />
-                      <span>📱 스마트폰 카메라 송출 시작</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleTurnOffBroadcast}
-                      className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
-                    >
-                      <Power className="w-4 h-4" />
-                      <span>⏹ 방송 끄기 (구글 드라이브 저장 선택)</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => startPhoneCameraStream(facingMode)}
+                    className="flex-1 py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-md"
+                  >
+                    <Video className="w-4 h-4" />
+                    <span>{isCamStreaming ? '📱 카메라 송출 중' : '📱 스마트폰 카메라 송출 시작'}</span>
+                  </button>
 
                   <button
                     type="button"
                     onClick={toggleCameraFacing}
-                    className="py-3 px-3 rounded-xl border border-gray-700 bg-gray-900 hover:bg-gray-800 text-xs font-semibold text-gray-200 flex items-center gap-1 shrink-0"
+                    className="py-3 px-2.5 rounded-xl border border-gray-700 bg-gray-900 hover:bg-gray-800 text-xs font-semibold text-gray-200 flex items-center gap-1 shrink-0"
                     title="전면/후면 카메라 전환"
                   >
                     <Camera className="w-4 h-4 text-emerald-400" />
@@ -1035,7 +1025,7 @@ export function LiveStreamStudio({
                   <button
                     type="button"
                     onClick={toggleMic}
-                    className={`py-3 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1 shrink-0 ${
+                    className={`py-3 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1 shrink-0 ${
                       micEnabled
                         ? 'border-gray-700 bg-gray-900 text-gray-200'
                         : 'border-red-500/50 bg-red-950/50 text-red-300'
@@ -1046,28 +1036,25 @@ export function LiveStreamStudio({
                   </button>
                 </div>
 
-                {/* 스마트폰 녹화 시작/방송 끄기 버튼 */}
-                <div className="flex items-center gap-2">
-                  {!isRecording ? (
-                    <button
-                      type="button"
-                      onClick={startPhoneRecording}
-                      className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition shadow-md"
-                    >
-                      <CircleDot className="w-4 h-4" />
-                      <span>⏺ 스마트폰 영상 녹화 시작</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleTurnOffBroadcast}
-                      className="flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-gray-950 text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-md animate-pulse"
-                    >
-                      <Power className="w-4 h-4" />
-                      <span>⏹ 방송 끄기 및 다시보기 저장 선택 ({formatTimer(recordingSeconds)})</span>
-                    </button>
-                  )}
-                </div>
+                {/* 스마트폰 녹화 시작 버튼 */}
+                <button
+                  type="button"
+                  onClick={startPhoneRecording}
+                  className="py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-gray-950 text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-md"
+                >
+                  <CircleDot className="w-4 h-4" />
+                  <span>{isRecording ? `⏺ 녹화 진행 중 (${formatTimer(recordingSeconds)})` : '⏺ 스마트폰 영상 녹화 시작'}</span>
+                </button>
+
+                {/* 방송 끄기 (구글 드라이브 저장 / 저장하지 않기 선택) 버튼 */}
+                <button
+                  type="button"
+                  onClick={handleTurnOffBroadcast}
+                  className="py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-lg ring-2 ring-red-400/50"
+                >
+                  <Power className="w-4 h-4" />
+                  <span>⏹ 방송 끄기 (드라이브 다시보기 저장)</span>
+                </button>
               </div>
 
               {/* 녹화 모드 선택 & 저장된 파일 다시 받기 */}
@@ -1154,17 +1141,27 @@ export function LiveStreamStudio({
             <h3 className="text-base font-bold text-white">{statusText}</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
               {effectiveAdmin
-                ? '상단의 [💻 내 노트북 화면 지정 및 공유 시작] 또는 스마트폰에서 [📱 스마트폰 카메라 송출 시작] 버튼을 누르면 실시간 방송이 즉시 시작됩니다.'
+                ? '상단의 [💻 내 노트북 화면 공유 시작] 또는 스마트폰에서 [📱 스마트폰 카메라 송출 시작] 버튼을 누르면 실시간 방송이 시작되며, [⏹ 방송 끄기]를 누르면 구글 드라이브 다시보기 저장 창이 나타납니다.'
                 : '모임장(Dr. J)이 노트북 화면 공유 또는 스마트폰 라이브 방송을 시작하면 자동으로 화면이 나타납니다.'}
             </p>
-            <button
-              type="button"
-              onClick={connectToBroadcasts}
-              className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-200 inline-flex items-center gap-1.5 transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>방송 신호 다시 확인</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={connectToBroadcasts}
+                className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs font-bold text-gray-200 inline-flex items-center gap-1.5 transition"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>방송 신호 다시 확인</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleTurnOffBroadcast}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-xs font-extrabold text-white inline-flex items-center gap-1.5 transition shadow-md"
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>⏹ 방송 끄기 (구글 드라이브 저장 선택)</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div
@@ -1204,24 +1201,35 @@ export function LiveStreamStudio({
               }`}
             />
 
-            {/* 좌측 상단 LIVE 상태 배지 */}
-            <div className="absolute top-3 left-3 z-30 flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-red-600/90 backdrop-blur-xs text-white text-[11px] font-black flex items-center gap-1.5 shadow-md">
-                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                LIVE
-              </span>
-              {showScreenStream && (
-                <span className="px-2 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-gray-200 text-[10px] font-semibold flex items-center gap-1">
-                  <Monitor className="w-3 h-3 text-carrot" />
-                  노트북 화면
+            {/* 좌측 상단 LIVE 상태 배지 & 방송 끄기 버튼 */}
+            <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg bg-red-600/90 backdrop-blur-xs text-white text-[11px] font-black flex items-center gap-1.5 shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  LIVE
                 </span>
-              )}
-              {showCamStream && (
-                <span className="px-2 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-gray-200 text-[10px] font-semibold flex items-center gap-1">
-                  <Smartphone className="w-3 h-3 text-emerald-400" />
-                  스마트폰 카메라
-                </span>
-              )}
+                {showScreenStream && (
+                  <span className="px-2 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-gray-200 text-[10px] font-semibold flex items-center gap-1">
+                    <Monitor className="w-3 h-3 text-carrot" />
+                    노트북 화면
+                  </span>
+                )}
+                {showCamStream && (
+                  <span className="px-2 py-1 rounded-lg bg-black/70 backdrop-blur-xs text-gray-200 text-[10px] font-semibold flex items-center gap-1">
+                    <Smartphone className="w-3 h-3 text-emerald-400" />
+                    스마트폰 카메라
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleTurnOffBroadcast}
+                className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg border border-red-400/60"
+              >
+                <Power className="w-3.5 h-3.5" />
+                <span>⏹ 방송 끄기</span>
+              </button>
             </div>
           </div>
         )}
@@ -1297,17 +1305,15 @@ export function LiveStreamStudio({
             <Maximize2 className="w-4 h-4" />
           </button>
 
-          {/* 관리자 하단 빠른 방송 끄기 버튼 */}
-          {effectiveAdmin && (isAnyLive || isRecording) && (
-            <button
-              type="button"
-              onClick={handleTurnOffBroadcast}
-              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold flex items-center gap-1 transition shadow-sm"
-            >
-              <Power className="w-3.5 h-3.5" />
-              <span>방송 끄기</span>
-            </button>
-          )}
+          {/* 하단 상시 노출 방송 끄기 버튼 */}
+          <button
+            type="button"
+            onClick={handleTurnOffBroadcast}
+            className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold flex items-center gap-1 transition shadow-sm"
+          >
+            <Power className="w-3.5 h-3.5" />
+            <span>⏹ 방송 끄기</span>
+          </button>
         </div>
       </div>
 
